@@ -61,6 +61,7 @@ public:
 	void update(const Passanger &passanger);
 
 	Passanger getFreePassangerById(int id);
+  Passanger getWayPassangerById(int id);
 	void setPassangerInWayById(int id);
 	void delWayPassangerById(int id);
 	
@@ -347,6 +348,11 @@ void Environment::setPassangerInWayById(int id) {
 	_wayPassangers[id] = p;
 }
 
+Passanger Environment::getWayPassangerById(int id) {
+  assert(_wayPassangers.count(id) != 0);
+  return _wayPassangers[id];
+}
+
 void Environment::delWayPassangerById(int id) {
 	assert(_wayPassangers.count(id) != 0);
 	_wayPassangers.erase(id);
@@ -428,7 +434,7 @@ void Taxi::update(int prevTime, int curTime) {
 				env->setPassangerInWayById(idPassanger);
 			} else if (idPassanger < 0) {
 				idPassanger = -idPassanger;
-				Passanger p = env->getFreePassangerById(idPassanger);
+				Passanger p = env->getWayPassangerById(idPassanger);
 				assert(p.to() == _pos);
 				delPassanger(p);
 				env->delWayPassangerById(idPassanger);
