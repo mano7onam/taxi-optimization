@@ -18,30 +18,26 @@
 #include <unordered_map>
 #include <list>
 #include <numeric>
+#include "Source.h"
 
 using namespace std;
 typedef long long ll;
 
 // declarations
+class Interactor;
 class Environment;
+
 class Point;
 class Command;
 class CommandsSequence;
 class Passanger;
 class Taxi;
 
-Environment* env; // the only global object
+// globals
+Environment* env;
+Interactor* interactor;
 
-// gets next int from the interactor
-int askInt() {
-	int res;
-	cin >> res;
-	return res;
-}
-
-
-// classes definitions
-// all functions definitions are out of the class
+// class definitions
 
 // our program state
 class Environment {
@@ -107,6 +103,10 @@ protected:
 
 // sequence of commands for taxi
 class CommandsSequence {
+public:
+	int size() { return v.size(); }
+	const vector<Command> getCommands() { return v; }
+
 protected:
 	vector<Command> v; // reversed order
 };
@@ -151,6 +151,40 @@ protected:
 	set<Passanger> _passangers;
 };
 
+
+
+class Interactor {
+public:
+	int askInt() {
+		int res;
+		cin >> res;
+		return res;
+	}
+
+	// id identified by index in vector in env
+	void setTaxiCommands(int taxiId, CommandsSequence new_commands) {
+		buffer[taxiId] = new_commands;
+	}
+
+	void commit() {
+		cout << buffer.size() << "\n";
+		for (auto el : buffer) {
+			cout << el.first + 1 << " " << el.second.size() << "\n";
+			auto& v = el.second.getCommands();
+			for (auto com_it = v.rbegin(); com_it != v.rend(); ++com_it) {
+				Command command = *com_it;
+				cout << command.getPoint().getX() + 1 << " " << command.getPoint().getY() + 1 << " " << command.getA() << " ";
+			}
+			cout << "\n";
+		}
+		cout.flush();
+		buffer.clear();
+	}
+
+private:
+	map<int, CommandsSequence> buffer;
+};
+
 enum UpdateState {
 	ST_START,
 	ST_NORMAL,
@@ -177,7 +211,7 @@ void solve() {
 }
 
 int main() {
-
+	interactor = new Interactor();
 	return 0;
 }
 
@@ -186,9 +220,9 @@ int main() {
 // Method definitions
 // Environment ==================================================================================
 void Environment::ask() {
-	_width = askInt();
-	_height = askInt();
-	int taxiCnt = askInt();
+	_width = interactor->askInt();
+	_height = interactor->askInt();
+	int taxiCnt = interactor->askInt();
 	_taxis.resize(taxiCnt);
 	for (auto el : _taxis) el.ask();
 }
@@ -213,8 +247,8 @@ int Environment::takeNextPsngId() {
 
 // Point ==================================================================================
 void Point::ask() {
-	x = askInt();
-	y = askInt();
+	x = interactor->askInt();
+	y = interactor->askInt();
 }
 
 void Point::setX(int x) {
