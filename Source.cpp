@@ -93,7 +93,7 @@ public:
 	void setX(int x);
 	void setY(int y);
 
-	bool operator ==(const Point& b) { return x == b.getX() && x == b.getY(); }
+	bool operator ==(const Point& b) { return x == b.getX() && y == b.getY(); }
 
 protected:
 	int x;
