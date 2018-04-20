@@ -18,26 +18,30 @@
 #include <unordered_map>
 #include <list>
 #include <numeric>
-// #include "Source.h"
 
 using namespace std;
 typedef long long ll;
 
 // declarations
-class Interactor;
 class Environment;
-
 class Point;
 class Command;
 class CommandsSequence;
 class Passanger;
 class Taxi;
 
-// globals
-Environment* env;
-Interactor* interactor;
+Environment* env; // the only global object
 
-// class definitions
+// gets next int from the interactor
+int askInt() {
+	int res;
+	cin >> res;
+	return res;
+}
+
+
+// classes definitions
+// all functions definitions are out of the class
 
 // our program state
 class Environment {
@@ -50,15 +54,12 @@ public:
 	int time() const { return _time; }
 	int width() const { return _width; }
 	int height() const { return _height; }
-
-	// uncomment when necessary (but really necessary ???) 
-	// const map<int, Passanger>& getFreePassangers() { return _freePassangers; }
+	const map<int, Passanger>& getFreePassangers() { return _passangers; }
 
 	void update(const Passanger &passanger);
 
-	Passanger getFreePassangerById(int id);
-	void setPassangerInWayById(int id);
-	void delWayPassangerById(int id);
+	Passanger getPassangerById(int id) const { return _passangers[id]; }
+	void delPassangerById(int id) { _passangers.erase(id); }
 	
 	int takeNextPsngId();
 
@@ -68,8 +69,7 @@ protected:
 	int _height;
 	int _max_psng_id;
 	vector<Taxi> _taxis;
-	map<int, Passanger> _wayPassangers;
-	map<int, Passanger> _freePassangers;
+	map<int, Passanger> _passangers;
 };
 
 // position on plane
@@ -110,9 +110,6 @@ protected:
 
 // sequence of commands for taxi
 class CommandsSequence {
-public:
-	int size() { return v.size(); }
-	const deque<Command> getCommands() { return v; }
 
 	Command getFirst() const { return v.front(); }
 
@@ -166,40 +163,6 @@ protected:
 	set<Passanger> _passangers;
 };
 
-
-
-class Interactor {
-public:
-	int askInt() {
-		int res;
-		cin >> res;
-		return res;
-	}
-
-	// id identified by index in vector in env
-	void setTaxiCommands(int taxiId, CommandsSequence new_commands) {
-		buffer[taxiId] = new_commands;
-	}
-
-	void commit() {
-		cout << buffer.size() << "\n";
-		for (auto el : buffer) {
-			cout << el.first + 1 << " " << el.second.size() << "\n";
-			auto& v = el.second.getCommands();
-			for (auto com_it = v.rbegin(); com_it != v.rend(); ++com_it) {
-				Command command = *com_it;
-				cout << command.getPoint().getX() + 1 << " " << command.getPoint().getY() + 1 << " " << command.getA() << " ";
-			}
-			cout << "\n";
-		}
-		cout.flush();
-		buffer.clear();
-	}
-
-private:
-	map<int, CommandsSequence> buffer;
-};
-
 enum UpdateState {
 	ST_START,
 	ST_NORMAL,
@@ -226,7 +189,7 @@ void solve() {
 }
 
 int main() {
-	interactor = new Interactor();
+
 	return 0;
 }
 
@@ -235,9 +198,9 @@ int main() {
 // Method definitions
 // Environment ==================================================================================
 void Environment::ask() {
-	_width = interactor->askInt();
-	_height = interactor->askInt();
-	int taxiCnt = interactor->askInt();
+	_width = askInt();
+	_height = askInt();
+	int taxiCnt = askInt();
 	_taxis.resize(taxiCnt);
 	for (auto el : _taxis) el.ask();
 }
@@ -248,7 +211,7 @@ Environment::Environment() {
 }
 
 void Environment::update(const Passanger &passanger) {
-	_freePassangers[passanger.id()] = passanger;
+	_passangers[passanger.id()] = passanger;
 	int prevTime = _time;
 	_time = passanger.time();
 	for (auto el : _taxis) {
@@ -260,27 +223,10 @@ int Environment::takeNextPsngId() {
 	return ++_max_psng_id;
 }
 
-Passanger Environment::getFreePassangerById(int id) {
-	assert(_freePassangers.count(id) != 0);
-	return _freePassangers[id];
-}
-
-void Environment::setPassangerInWayById(int id) {
-	assert(_freePassangers.count(id) != 0);
-	Passanger p = _freePassangers[id];
-	_freePassangers.erase(id);
-	_wayPassangers[id] = p;
-}
-
-void Environment::delWayPassangerById(int id) {
-	assert(_wayPassangers.count(id) != 0);
-	_wayPassangers.erase(id);
-}
-
 // Point ==================================================================================
 void Point::ask() {
-	x = interactor->askInt();
-	y = interactor->askInt();
+	x = askInt();
+	y = askInt();
 }
 
 void Point::setX(int x) {
@@ -322,7 +268,7 @@ void Taxi::ask() {
 }
 
 void Taxi::addPassanger(const Passanger &p) {
-	assert(static_cast<int>(_passangers.size()) < 4);
+	assert(_passangers.size() < 4);
 	_passangers.insert(p);
 }
 
@@ -340,16 +286,10 @@ void Taxi::update(int prevTime, int curTime) {
 		if (needTime >= restTime) {
 			_commands.popFirst();
 			_pos = firstComm.getPoint();
-			int idPassanger = firstComm.getA();
-			if (idPassanger > 0) {
-				Passanger p = env->getFreePassangerById(idPassanger);
-				addPassanger(p);
-				env->setPassangerInWayById(idPassanger);
-			} else if (idPassanger < 0) {
-				idPassanger = -idPassanger;
-				Passanger p = env->getFreePassangerById(idPassanger);
-				delPassanger(p);
-				env->delWayPassangerById(idPassanger);
+			if (firstComm.getA() > 0) {
+				// TODO: add new passanger
+			} else if (firstComm.getA() < 0) {
+				// TODO: del passanger
 			}
 			restTime -= needTime;
 		} else {
