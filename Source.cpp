@@ -32,6 +32,7 @@ class Command;
 class CommandsSequence;
 class Passanger;
 class Taxi;
+using PassangersSet = set<Passanger>;
 
 // globals
 Environment* env;
@@ -51,8 +52,8 @@ public:
 	int width() const { return _width; }
 	int height() const { return _height; }
 
-	// uncomment when necessary (but really necessary ???) 
-	// const map<int, Passanger>& getFreePassangers() { return _freePassangers; }
+	const map<int, Passanger>& getFreePassangers() const { return _freePassangers; }
+	const vector<Taxi>& getTaxis() const { return _taxis; }
 
 	void update(const Passanger &passanger);
 
@@ -60,13 +61,17 @@ public:
 	void setPassangerInWayById(int id);
 	void delWayPassangerById(int id);
 	
-	int takeNextPsngId();
+	int takeNextPassangerId();
+	int takeNextTaxiId();
+
+	void commit(map<int, CommandsSequence>& c);
 
 protected:
 	int _time;
 	int _width;
 	int _height;
 	int _max_psng_id;
+	int _max_taxi_id;
 	vector<Taxi> _taxis;
 	map<int, Passanger> _wayPassangers;
 	map<int, Passanger> _freePassangers;
@@ -93,6 +98,7 @@ protected:
 // one command for taxi, gonna to be extended later
 class Command : public Point {
 public:
+	Command(Point p, int a = 0) : Point(p), a(a) {}
 	Command(int x = 0, int y = 0, int a = 0) : Point(x, y), a(a) {}
 
 	int getA() const { return a; }
@@ -153,17 +159,27 @@ protected:
 class Taxi {
 public:
 	void ask();
+
+	Taxi();
 	
+	int id() const { return _id; }
+	Point pos() const { return _pos; }
+	const CommandsSequence& commands() const { return _commands; }
+	const PassangersSet& passangers() const { return _passangers; }
+
 	void update(int prevTime, int curTime);
+	void updateCommands(CommandsSequence commands) { _commands = commands; }
 
 	void addPassanger(const Passanger &p);
-
 	void delPassanger(const Passanger &p);
 
+	int freeSeats() { return 4 - _passangers.size(); }
+
 protected:
+	int _id;
 	Point _pos;
 	CommandsSequence _commands;
-	set<Passanger> _passangers;
+	PassangersSet _passangers;
 };
 
 
@@ -176,28 +192,19 @@ public:
 		return res;
 	}
 
-	// id identified by index in vector in env
-	void setTaxiCommands(int taxiId, CommandsSequence new_commands) {
-		buffer[taxiId] = new_commands;
-	}
-
-	void commit() {
+	void commit(map<int, CommandsSequence>& buffer) {
 		cout << buffer.size() << "\n";
 		for (auto el : buffer) {
 			cout << el.first + 1 << " " << el.second.size() << "\n";
 			auto& v = el.second.getCommands();
-			for (auto com_it = v.rbegin(); com_it != v.rend(); ++com_it) {
+			for (auto com_it = v.begin(); com_it != v.end(); ++com_it) {
 				Command command = *com_it;
 				cout << command.getPoint().getX() + 1 << " " << command.getPoint().getY() + 1 << " " << command.getA() << " ";
 			}
 			cout << "\n";
 		}
 		cout.flush();
-		buffer.clear();
 	}
-
-private:
-	map<int, CommandsSequence> buffer;
 };
 
 enum UpdateState {
@@ -207,22 +214,50 @@ enum UpdateState {
 };
 
 // main solution function
-void updateCommands(UpdateState state) {
-	// TODO: write logic and claim function
+map<int, CommandsSequence> calcCommands(UpdateState state) {
+	vector<Taxi> taxis = env->getTaxis();
+	vector<Passanger> psngrs; // unredistributed to taxis passangers
+	auto m = env->getFreePassangers();
+	for (auto el : m) {
+		psngrs.push_back(el.second);
+	}
+	map<int, CommandsSequence> c;
+	while (!psngrs.empty()) {
+		random_shuffle(taxis.begin(), taxis.end());
+		for (auto taxi : taxis) {
+			if (!taxi.freeSeats()) continue;
+			Passanger p = psngrs.back();
+			psngrs.pop_back();
+			if (!c.count(taxi.id())) {
+				c[taxi.id()] = taxi.commands();
+			}
+			Command take_pas = Command(p.from(), p.id());
+			Command drop_pas = Command(p.to(), -p.id());
+			c[taxi.id()].addCommand(take_pas);
+			c[taxi.id()].addCommand(drop_pas);
+		}
+	}
+	return c;
+}
+
+void updateAndCommit(UpdateState state) {
+	auto m = calcCommands(ST_START);
+	env->commit(m);
+	interactor->commit(m);
 }
 
 void solve() {
 	env = new Environment();
 	env->ask();
-	updateCommands(ST_START);
+	updateAndCommit(ST_START);
 	Passanger passanger;
 	passanger.ask();
 	while (!passanger.isFinish()) {
 		env->update(passanger);
 		passanger.ask();
-		updateCommands(ST_NORMAL);
+		updateAndCommit(ST_NORMAL);
 	}
-	updateCommands(ST_FINISH);
+	updateAndCommit(ST_FINISH);
 }
 
 int main() {
@@ -245,6 +280,7 @@ void Environment::ask() {
 Environment::Environment() {
 	_time = 0;
 	_max_psng_id = 0;
+	_max_taxi_id = 0;
 }
 
 void Environment::update(const Passanger &passanger) {
@@ -256,8 +292,18 @@ void Environment::update(const Passanger &passanger) {
 	}
 }
 
-int Environment::takeNextPsngId() {
+int Environment::takeNextPassangerId() {
 	return ++_max_psng_id;
+}
+
+int Environment::takeNextTaxiId() {
+	return ++_max_taxi_id;
+}
+
+void Environment::commit(map<int, CommandsSequence>& c) {
+	for (auto el : _taxis) {
+		el.updateCommands(c[el.id()]);
+	}
 }
 
 Passanger Environment::getFreePassangerById(int id) {
@@ -299,7 +345,7 @@ static int getDistance(const Point &a, const Point &b) {
 
 // Passanger ==================================================================================
 void Passanger::ask() {
-	_id = env->takeNextPsngId();
+	_id = env->takeNextPassangerId();
 	_p_from.ask();
 	_p_to.ask();
 }
@@ -319,6 +365,10 @@ bool Passanger::isFinish() const {
 // Taxi ==================================================================================
 void Taxi::ask() {
 	_pos.ask();
+	_id = env->takeNextTaxiId();
+}
+
+Taxi::Taxi() {
 }
 
 void Taxi::addPassanger(const Passanger &p) {
