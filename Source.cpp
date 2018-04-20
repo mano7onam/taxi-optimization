@@ -332,7 +332,6 @@ void Taxi::delPassanger(const Passanger &p) {
 }
 
 void Taxi::update(int prevTime, int curTime) {
-	// TODO: update commands and passangers
 	int restTime = curTime - prevTime;
 	while (!_commands.isEmpty()) {
 		auto firstComm = _commands.getFirst();
@@ -367,7 +366,6 @@ int Command::getTimeToPerform(const Point &from) const {
 }
 
 Point Command::performPart(const Point &from, int haveTime) {
-	// TODO: calculate new position of the taxi on the path
 	int dx = (from.getX() < getPoint().getX()) ? 1 : -1;
 	int dy = (from.getY() < getPoint().getY()) ? 1 : -1;
 	
