@@ -90,6 +90,8 @@ public:
 	void setX(int x);
 	void setY(int y);
 
+	bool operator ==(const Point& b) { x == b.getX() && x == b.getY(); }
+
 protected:
 	int x;
 	int y;
@@ -386,18 +388,20 @@ void Taxi::update(int prevTime, int curTime) {
 	while (!_commands.isEmpty()) {
 		auto firstComm = _commands.getFirst();
 		int needTime = firstComm.getTimeToPerform(_pos);
-		if (needTime >= restTime) {
+		if (needTime <= restTime) {
 			_commands.popFirst();
 			_pos = firstComm.getPoint();
 			
 			int idPassanger = firstComm.getA();
 			if (idPassanger > 0) {
 				Passanger p = env->getFreePassangerById(idPassanger);
+				assert(p.from() == _pos);
 				addPassanger(p);
 				env->setPassangerInWayById(idPassanger);
 			} else if (idPassanger < 0) {
 				idPassanger = -idPassanger;
 				Passanger p = env->getFreePassangerById(idPassanger);
+				assert(p.to() == _pos);
 				delPassanger(p);
 				env->delWayPassangerById(idPassanger);
 			}
