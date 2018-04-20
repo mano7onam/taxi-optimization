@@ -192,8 +192,10 @@ protected:
 class Interactor {
 public:
 	Interactor() {
-		//freopen("input.txt", "r", stdin);
-		//freopen("output.txt", "w", stdout);
+#ifdef _LOCAL_TEST
+		freopen("input.txt", "r", stdin);
+		freopen("output.txt", "w", stdout);
+#endif
 	}
 
 	int askInt() {
@@ -243,19 +245,18 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 	map<int, CommandsSequence> c;
 	while (!psngrs.empty()) {
 		random_shuffle(taxis.begin(), taxis.end());
-		for (auto taxi : taxis) {
-			if (!taxi.freeSeats()) continue;
-			Passanger p = psngrs.begin()->second;
-			psngrs.erase(psngrs.begin());
-			sol->distributePassanger(p);
-			if (!c.count(taxi.id())) {
-				c[taxi.id()] = taxi.commands();
-			}
-			Command take_pas = Command(p.from(), p.id());
-			Command drop_pas = Command(p.to(), -p.id());
-			c[taxi.id()].addCommand(take_pas);
-			c[taxi.id()].addCommand(drop_pas);
+		auto taxi = *taxis.begin();
+		if (!taxi.freeSeats()) continue;
+		Passanger p = psngrs.begin()->second;
+		psngrs.erase(psngrs.begin());
+		sol->distributePassanger(p);
+		if (!c.count(taxi.id())) {
+			c[taxi.id()] = taxi.commands();
 		}
+		Command take_pas = Command(p.from(), p.id());
+		Command drop_pas = Command(p.to(), -p.id());
+		c[taxi.id()].addCommand(take_pas);
+		c[taxi.id()].addCommand(drop_pas);
 	}
 	return c;
 }
@@ -314,7 +315,7 @@ void Environment::update(const Passanger &passanger) {
 	_freePassangers[passanger.id()] = passanger;
 	int prevTime = _time;
 	_time = passanger.time();
-	for (auto el : _taxis) {
+	for (auto& el : _taxis) {
 		el.update(prevTime, time());
 	}
 }
@@ -328,7 +329,7 @@ int Environment::takeNextTaxiId() {
 }
 
 void Environment::commit(map<int, CommandsSequence>& c) {
-	for (auto el : _taxis) {
+	for (auto& el : _taxis) {
 		if (!c.count(el.id())) continue;
 		el.updateCommands(c[el.id()]);
 	}
