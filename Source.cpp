@@ -102,7 +102,7 @@ public:
 	int getTimeToPerform(const Point &from) const; 
 
 	// perform part of command - get new position of taxi in the path
-	Point performPart(const Point &from);
+	Point performPart(const Point &from, int haveTime);
 
 protected:	
 	int a;
@@ -340,6 +340,7 @@ void Taxi::update(int prevTime, int curTime) {
 		if (needTime >= restTime) {
 			_commands.popFirst();
 			_pos = firstComm.getPoint();
+			
 			int idPassanger = firstComm.getA();
 			if (idPassanger > 0) {
 				Passanger p = env->getFreePassangerById(idPassanger);
@@ -351,9 +352,10 @@ void Taxi::update(int prevTime, int curTime) {
 				delPassanger(p);
 				env->delWayPassangerById(idPassanger);
 			}
+			
 			restTime -= needTime;
 		} else {
-			_pos = firstComm.performPart(_pos);
+			_pos = firstComm.performPart(_pos, restTime);
 			break;
 		}
 	}
@@ -364,7 +366,24 @@ int Command::getTimeToPerform(const Point &from) const {
 	return getDistance(from, getPoint());
 }
 
-Point Command::performPart(const Point &from) {
+Point Command::performPart(const Point &from, int haveTime) {
 	// TODO: calculate new position of the taxi on the path
-	return Point(0, 0);
+	int dx = (from.getX() < getPoint().getX()) ? 1 : -1;
+	int dy = (from.getY() < getPoint().getY()) ? 1 : -1;
+	
+	int diffX = abs(from.getX() - getPoint().getX());
+	int diffY = abs(from.getY() - getPoint().getY());
+	assert(diffX + diffY > haveTime);
+
+	int resX = from.getX();
+	int resY = from.getY();
+
+	if (haveTime >= diffX) {
+		resX = getPoint().getX();
+		resY += dy * (haveTime - diffX);
+	} else {
+		resX += dx * haveTime;
+	}
+
+	return Point(resX, resY);
 }
