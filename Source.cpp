@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+// #define _CRT_SECURE_NO_WARNINGS
 #pragma comment(linker, "/STACK:10034217728")
 #include <iostream>
 #include <cstdio>
@@ -51,14 +51,15 @@ public:
 	Environment();
 
 	// getters
-	int time() const;
-	int width() const;
-	int height() const;
-	const list<Passanger>& freePassangers();
+	int time() const { return _time; }
+	int width() const { return _width; }
+	int height() const { return _height; }
+	const list<Passanger>& getFreePassangers() { return _passangers; }
 
 	void update(Passanger passanger);
 	
 	int takeNextPsngId();
+
 protected:
 	int _time;
 	int _width;
@@ -73,10 +74,11 @@ class Point {
 public:
 	void ask();
 
-	Point(int x = 0, int y = 0);
+	Point(int x = 0, int y = 0) : x(x), y(y) {}
 
-	int getX();
-	int getY();
+	int getX() const { return x; }
+	int getY() const { return y; }
+	
 	void setX(int x);
 	void setY(int y);
 
@@ -100,13 +102,16 @@ public:
 
 	Passanger();
 
-	int id();
-	int time();
-	Point from();
-	Point to();
+	// getters
+	int id() const { return _id; }
+	int time() const { return _time; }
+	Point from() const { return _p_from; }
+	Point to() const { return _p_to; }
 
 	bool isStart()  const;
 	bool isFinish() const;
+
+	bool operator < (const Passanger &p) const { return _id < p._id; }
 
 protected:
 	int _id;
@@ -121,10 +126,14 @@ public:
 	
 	void update(int prevTime, int curTime);
 
+	void addPassanger(const Passanger &p) { passangers.insert(p); }
+
+	void delPassanger(const Passanger &p) { passangers.erase(p); }	
+
 protected:
 	Point pos;
 	CommandsSequence commands;
-	list<Passanger> passangers;
+	set<Passanger> passangers;
 };
 
 enum UpdateState {
@@ -159,10 +168,6 @@ int main() {
 
 
 
-
-
-
-
 // Method definitions
 // Environment ==================================================================================
 void Environment::ask() {
@@ -176,22 +181,6 @@ void Environment::ask() {
 Environment::Environment() {
 	_time = 0;
 	_max_psng_id = 0;
-}
-
-int Environment::time() const {
-	return _time;
-}
-
-int Environment::width() const {
-	return _width;
-}
-
-int Environment::height() const {
-	return _height;
-}
-
-const list<Passanger>& Environment::freePassangers() {
-	return _passangers;
 }
 
 void Environment::update(Passanger passanger) {
@@ -213,19 +202,6 @@ void Point::ask() {
 	y = askInt();
 }
 
-Point::Point(int x, int y) {
-	setX(x);
-	setY(y);
-}
-
-int Point::getX() {
-	return x;
-}
-
-int Point::getY() {
-	return y;
-}
-
 void Point::setX(int x) {
 	assert(x >= 0 && x < env->width());
 	this->x = x;
@@ -245,22 +221,6 @@ void Passanger::ask() {
 
 Passanger::Passanger() {
 	_time = 0;
-}
-
-int Passanger::id() {
-	return _id;
-}
-
-int Passanger::time() {
-	return _time;
-}
-
-Point Passanger::from() {
-	return _p_from;
-}
-
-Point Passanger::to() {
-	return _p_to;
 }
 
 bool Passanger::isStart() const {
