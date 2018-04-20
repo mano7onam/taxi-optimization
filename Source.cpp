@@ -1,4 +1,4 @@
-// #define _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 #pragma comment(linker, "/STACK:10034217728")
 #include <iostream>
 #include <cstdio>
@@ -54,9 +54,9 @@ public:
 	int time() const { return _time; }
 	int width() const { return _width; }
 	int height() const { return _height; }
-	const list<Passanger>& getFreePassangers() { return _passangers; }
+	const set<Passanger>& getFreePassangers() { return _passangers; }
 
-	void update(Passanger passanger);
+	void update(const Passanger &passanger);
 	
 	int takeNextPsngId();
 
@@ -66,7 +66,7 @@ protected:
 	int _height;
 	int _max_psng_id;
 	vector<Taxi> _taxis;
-	list<Passanger> _passangers;
+	set<Passanger> _passangers;
 };
 
 // position on plane
@@ -88,7 +88,22 @@ protected:
 };
 
 // one command for taxi, gonna to be extended later
-class Command : public Point {};
+class Command : public Point {
+public:
+	Command(int x = 0, int y = 0, int a = 0) : Point(x, y), a(a) {}
+
+	int getA() const { return a; }
+	Point getPoint() const { return Point(x, y); }
+
+	// can perform full command
+	int getTimeToPerform(const Point &from) const; 
+
+	// perform part of command - get new position of taxi in the path
+	Point performPart(const Point &from);
+
+protected:	
+	int a;
+};
 
 // sequence of commands for taxi
 class CommandsSequence {
@@ -126,14 +141,14 @@ public:
 	
 	void update(int prevTime, int curTime);
 
-	void addPassanger(const Passanger &p) { passangers.insert(p); }
+	void addPassanger(const Passanger &p);
 
-	void delPassanger(const Passanger &p) { passangers.erase(p); }	
+	void delPassanger(const Passanger &p);
 
 protected:
-	Point pos;
-	CommandsSequence commands;
-	set<Passanger> passangers;
+	Point _pos;
+	CommandsSequence _commands;
+	set<Passanger> _passangers;
 };
 
 enum UpdateState {
@@ -183,8 +198,8 @@ Environment::Environment() {
 	_max_psng_id = 0;
 }
 
-void Environment::update(Passanger passanger) {
-	_passangers.push_back(passanger);
+void Environment::update(const Passanger &passanger) {
+	_passangers.insert(passanger);
 	int prevTime = _time;
 	_time = passanger.time();
 	for (auto el : _taxis) {
@@ -212,6 +227,10 @@ void Point::setY(int y) {
 	this->y = y;
 }
 
+static int getDistance(const Point &a, const Point &b) {
+	return abs(a.getX() - b.getX()) + abs(a.getY() - b.getY());
+}
+
 // Passanger ==================================================================================
 void Passanger::ask() {
 	_id = env->takeNextPsngId();
@@ -233,9 +252,31 @@ bool Passanger::isFinish() const {
 
 // Taxi ==================================================================================
 void Taxi::ask() {
-	pos.ask();
+	_pos.ask();
+}
+
+void Taxi::addPassanger(const Passanger &p) {
+	assert(_passangers.size() < 4);
+	_passangers.insert(p);
+}
+
+void Taxi::delPassanger(const Passanger &p) {
+	assert(_passangers.count(p));
+	_passangers.erase(p);
 }
 
 void Taxi::update(int prevTime, int curTime) {
 	// TODO: update commands and passangers
+	int restTime = curTime - prevTime;
+	
+}
+
+// Command ==================================================================================
+int Command::getTimeToPerform(const Point &from) const {
+	return getDistance(from, getPoint());
+}
+
+Point Command::performPart(const Point &from) {
+	// TODO: calculate new position of the taxi on the path
+	return Point(0, 0);
 }
