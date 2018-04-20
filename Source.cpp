@@ -1,5 +1,5 @@
 #define _CRT_SECURE_NO_WARNINGS
-#pragma comment(linker, "/STACK:10034217728")
+//#pragma comment(linker, "/STACK:10034217728")
 #include <iostream>
 #include <cstdio>
 #include <vector>
@@ -32,11 +32,13 @@ class Command;
 class CommandsSequence;
 class Passanger;
 class Taxi;
+class SolutionEnvironment;
 using PassangersSet = set<Passanger>;
 
 // globals
 Environment* env;
 Interactor* interactor;
+SolutionEnvironment* sol;
 
 // class definitions
 
@@ -54,6 +56,7 @@ public:
 
 	const map<int, Passanger>& getFreePassangers() const { return _freePassangers; }
 	const vector<Taxi>& getTaxis() const { return _taxis; }
+	const Passanger getLastPassanger() const;
 
 	void update(const Passanger &passanger);
 
@@ -90,7 +93,7 @@ public:
 	void setX(int x);
 	void setY(int y);
 
-	bool operator ==(const Point& b) { x == b.getX() && x == b.getY(); }
+	bool operator ==(const Point& b) { return x == b.getX() && x == b.getY(); }
 
 protected:
 	int x;
@@ -188,6 +191,11 @@ protected:
 
 class Interactor {
 public:
+	Interactor() {
+		//freopen("input.txt", "r", stdin);
+		//freopen("output.txt", "w", stdout);
+	}
+
 	int askInt() {
 		int res;
 		cin >> res;
@@ -195,16 +203,16 @@ public:
 	}
 
 	void commit(map<int, CommandsSequence>& buffer) {
-		cout << buffer.size() << "\n";
+		cout << buffer.size() << " ";
 		for (auto el : buffer) {
-			cout << el.first + 1 << " " << el.second.size() << "\n";
+			cout << el.first << " " << el.second.size() << " ";
 			auto& v = el.second.getCommands();
 			for (auto com_it = v.begin(); com_it != v.end(); ++com_it) {
 				Command command = *com_it;
 				cout << command.getPoint().getX() + 1 << " " << command.getPoint().getY() + 1 << " " << command.getA() << " ";
 			}
-			cout << "\n";
 		}
+		cout << endl;
 		cout.flush();
 	}
 };
@@ -215,21 +223,31 @@ enum UpdateState {
 	ST_FINISH
 };
 
+class SolutionEnvironment {
+public:
+	const map<int, Passanger>& getWaitingPassangers() const { return _waitingPassangers; }
+	void distributePassanger(const Passanger& p) { _waitingPassangers.erase(p.id()); }
+	void addPassanger(const Passanger& p) { _waitingPassangers[p.id()] = p; }
+private:
+	map<int, Passanger> _waitingPassangers; // list of undistributed to taxis passangers
+};
+
 // main solution function
 map<int, CommandsSequence> calcCommands(UpdateState state) {
 	vector<Taxi> taxis = env->getTaxis();
-	vector<Passanger> psngrs; // unredistributed to taxis passangers
-	auto m = env->getFreePassangers();
-	for (auto el : m) {
-		psngrs.push_back(el.second);
+	if (state == ST_NORMAL) {
+		sol->addPassanger(env->getLastPassanger());
 	}
+	auto psngrs = sol->getWaitingPassangers(); // unredistributed to taxis passangers
+
 	map<int, CommandsSequence> c;
 	while (!psngrs.empty()) {
 		random_shuffle(taxis.begin(), taxis.end());
 		for (auto taxi : taxis) {
 			if (!taxi.freeSeats()) continue;
-			Passanger p = psngrs.back();
-			psngrs.pop_back();
+			Passanger p = psngrs.begin()->second;
+			psngrs.erase(psngrs.begin());
+			sol->distributePassanger(p);
 			if (!c.count(taxi.id())) {
 				c[taxi.id()] = taxi.commands();
 			}
@@ -243,27 +261,29 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(ST_START);
+	auto m = calcCommands(state);
 	env->commit(m);
 	interactor->commit(m);
 }
 
 void solve() {
 	env = new Environment();
+	sol = new SolutionEnvironment();
 	env->ask();
 	updateAndCommit(ST_START);
 	Passanger passanger;
 	passanger.ask();
 	while (!passanger.isFinish()) {
 		env->update(passanger);
-		passanger.ask();
 		updateAndCommit(ST_NORMAL);
+		passanger.ask();
 	}
 	updateAndCommit(ST_FINISH);
 }
 
 int main() {
 	interactor = new Interactor();
+	solve();
 	return 0;
 }
 
@@ -276,13 +296,18 @@ void Environment::ask() {
 	_height = interactor->askInt();
 	int taxiCnt = interactor->askInt();
 	_taxis.resize(taxiCnt);
-	for (auto el : _taxis) el.ask();
+	for (auto& el : _taxis) el.ask();
 }
 
 Environment::Environment() {
 	_time = 0;
 	_max_psng_id = 0;
 	_max_taxi_id = 0;
+}
+
+const Passanger Environment::getLastPassanger() const {
+	int last_id = _max_psng_id;
+	return _freePassangers.at(last_id);
 }
 
 void Environment::update(const Passanger &passanger) {
@@ -304,6 +329,7 @@ int Environment::takeNextTaxiId() {
 
 void Environment::commit(map<int, CommandsSequence>& c) {
 	for (auto el : _taxis) {
+		if (!c.count(el.id())) continue;
 		el.updateCommands(c[el.id()]);
 	}
 }
@@ -327,8 +353,8 @@ void Environment::delWayPassangerById(int id) {
 
 // Point ==================================================================================
 void Point::ask() {
-	x = interactor->askInt();
-	y = interactor->askInt();
+	x = interactor->askInt() - 1;
+	y = interactor->askInt() - 1;
 }
 
 void Point::setX(int x) {
@@ -348,6 +374,7 @@ static int getDistance(const Point &a, const Point &b) {
 // Passanger ==================================================================================
 void Passanger::ask() {
 	_id = env->takeNextPassangerId();
+	_time = interactor->askInt();
 	_p_from.ask();
 	_p_to.ask();
 }
