@@ -101,6 +101,8 @@ protected:
 	int y;
 };
 
+static int getDistance(const Point &a, const Point &b);
+
 // one command for taxi, gonna to be extended later
 class Command : public Point {
 public:
@@ -154,6 +156,8 @@ public:
 	bool isFinish() const;
 
 	bool operator < (const Passanger &p) const { return _id < p._id; }
+
+  int getPathLength();
 
 protected:
 	int _id;
@@ -241,6 +245,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 	if (state == ST_NORMAL) {
 		sol->addPassanger(env->getLastPassanger());
 	}
+
 	auto psngrs = sol->getWaitingPassangers(); // unredistributed to taxis passangers
 
 	map<int, CommandsSequence> c;
@@ -248,8 +253,19 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 		random_shuffle(taxis.begin(), taxis.end());
 		auto taxi = *taxis.begin();
 		if (!taxi.freeSeats()) continue;
-		Passanger p = psngrs.begin()->second;
-		psngrs.erase(psngrs.begin());
+
+    int bestId = psngrs.begin()->first;
+    int minSum = 1e9+7;
+    for (auto el : psngrs) {
+      int curSum = getDistance(taxi.pos(), el.second.from()) + el.second.getPathLength();
+      if (curSum < minSum) {
+        minSum = curSum;
+        bestId = el.first;
+      }
+    }
+
+		Passanger p = psngrs[bestId];
+		psngrs.erase(bestId);
 		sol->distributePassanger(p);
 		if (!c.count(taxi.id())) {
 			c[taxi.id()] = taxi.commands();
@@ -396,6 +412,10 @@ bool Passanger::isStart() const {
 
 bool Passanger::isFinish() const {
 	return _time == -1;
+}
+
+int Passanger::getPathLength() {
+  return getDistance(_p_from, _p_to);
 }
 
 // Taxi ==================================================================================
