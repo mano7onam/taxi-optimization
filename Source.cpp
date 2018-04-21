@@ -133,6 +133,12 @@ public:
 	// perform part of command - get new position of taxi in the path
 	Point performPart(const Point &from, int haveTime);
 
+	bool operator <(const Command c) {
+		if (a != c.a) return a < c.a;
+		if (x != c.getX()) return x < c.getX();
+		return y < c.getY();
+	}
+
 protected:	
 	int a;
 };
@@ -140,17 +146,20 @@ protected:
 // sequence of commands for taxi
 class CommandsSequence {
 public:
-	int size() { return v.size(); }
-	const deque<Command> getCommands() { return v; }
+	int size() const { return v.size(); }
+	const deque<Command>& getCommands() const { return v; }
 	Command getFirst() const { return v.front(); }
 
 	void popFirst() { v.pop_front(); }
 	void addCommand(const Command &comm) { v.push_back(comm); }
 
 	int ordersCount() const; // number of different passangers we want to take
+	bool isCorrect() const; // check order and that taxi capacity is enough to perform this sequence
 	bool isEmpty() { return v.empty(); }
 
-	// estimate score we will get for performing this commands list
+	void nextPermutation() { next_permutation(v.begin(), v.end()); }
+
+	// estimate score we will get for performing these commands
 	// if we assign it to certain taxi
 	double estimateScore(const Taxi& taxi);
 
@@ -222,7 +231,6 @@ protected:
 };
 
 
-
 class Interactor {
 public:
 	Interactor() {
@@ -264,8 +272,13 @@ public:
 	const map<int, Passanger>& getWaitingPassangers() const { return _waitingPassangers; }
 	void distributePassanger(const Passanger& p) { _waitingPassangers.erase(p.id()); }
 	void addPassanger(const Passanger& p) { _waitingPassangers[p.id()] = p; }
+
+	// reorder commands to get maximum score from it
+	void optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const;
 private:
 	map<int, Passanger> _waitingPassangers; // list of undistributed to taxis passangers
+
+	const int FULL_REORDER_LIMIT = 7;
 };
 
 // main solution function
@@ -295,6 +308,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 			double wasScore = commands.estimateScore(taxi);
 			commands.addCommand(takePas);
 			commands.addCommand(dropPas);
+			sol->optimizeCommandsOrder(commands, taxi);
 			double becomeScore = commands.estimateScore(taxi);
 			double addition = becomeScore - wasScore;
 			if (addition > bestAddition) {
@@ -311,23 +325,8 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 			}
 			c[taxi.id()].addCommand(takePas);
 			c[taxi.id()].addCommand(dropPas);
+			sol->optimizeCommandsOrder(c[taxi.id()], taxi);
 		}
-		/*int bestId = psngrs.begin()->first;
-		int minSum = 1e9 + 7;
-		for (auto el : psngrs) {
-			int curSum = getDistance(taxi.pos(), el.second.from()) + el.second.getPathLength();
-			if (curSum < minSum) {
-				minSum = curSum;
-				bestId = el.first;
-			}
-		}
-
-		Passanger p = psngrs[bestId];
-		psngrs.erase(bestId);
-		sol->distributePassanger(p);
-		if (!c.count(taxi.id())) {
-			c[taxi.id()] = taxi.commands();
-		}*/
 	}
 	return c;
 }
@@ -613,6 +612,28 @@ int CommandsSequence::ordersCount() const {
 	return res;
 }
 
+bool CommandsSequence::isCorrect() const {
+	list<int> openedPassangers;
+	for (auto& command : v) {
+		int a = command.getA();
+		if (a == 0) continue;
+		int id = abs(a);
+		if (a > 0) {
+			openedPassangers.push_back(id);
+			if (openedPassangers.size() > 4) {
+				return false;
+			}
+		} else {
+			auto it = find(openedPassangers.begin(), openedPassangers.end(), id);
+			if (it == openedPassangers.end()) {
+				return false;
+			}
+			openedPassangers.erase(it);
+		}
+	}
+	return true;
+}
+
 double CommandsSequence::estimateScore(const Taxi & taxi) {
 	int nowTime = env->time();
 	Point p = taxi.pos();
@@ -639,4 +660,27 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 		res += el.second.getScore();
 	}
 	return res;
+}
+
+// SolutionEnvironment ==================================================================================
+void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
+	if (commands.size() < FULL_REORDER_LIMIT) {
+		int fact = 1;
+		for (int i = 2; i < commands.size(); i++) {
+			fact *= i;
+		}
+		CommandsSequence bestSequence = commands;
+		double bestScore = bestSequence.estimateScore(taxi);
+		for (int i = 0; i < fact; i++) {
+			commands.nextPermutation();
+			if (!commands.isCorrect()) continue;
+			double curScore = commands.estimateScore(taxi);
+			if (curScore > bestScore) {
+				bestScore = curScore;
+				bestSequence = commands;
+			}
+		}
+		commands = bestSequence;
+	}
+	// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
 }
