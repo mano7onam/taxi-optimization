@@ -625,7 +625,7 @@ int CommandsSequence::ordersCount() const {
 }
 
 bool CommandsSequence::isCorrect() const {
-	list<int> openedPassangers;
+	set<int> openedPassangers;
 
 	// there are possible commands which are partially done
 	// when passanger is already in the taxi. So, we mark all
@@ -633,30 +633,38 @@ bool CommandsSequence::isCorrect() const {
 	for (auto it = v.rbegin(); it != v.rend(); ++it) {
 		Command command = *it;
 		int a = command.getA();
-		if (a < 0) openedPassangers.push_back(-a);
+		if (0 == a) {
+			continue;
+		}
+		int id = abs(a);
+		if (a < 0) {
+			openedPassangers.insert(id);
+		}
 		else {
-			auto it = find(openedPassangers.begin(), openedPassangers.end(), a);
-			if (it == openedPassangers.end()) {
+			if (!openedPassangers.count(id)) {
 				return false;
 			}
-			openedPassangers.erase(it);
+			openedPassangers.erase(id);
 		}
 	}
 
-	// checking capacity
+	// checking taxi capacity (4 passengers)
 	for (auto& command : v) {
 		int a = command.getA();
-		if (a == 0) continue;
+		if (0 == a) {
+			continue;
+		}
 		int id = abs(a);
 		if (a > 0) {
-			openedPassangers.push_back(id);
+			openedPassangers.insert(id);
 			if (openedPassangers.size() > 4) {
 				return false;
 			}
 		} else {
-			openedPassangers.remove(id);
+			openedPassangers.erase(id);
 		}
 	}
+
 	assert(openedPassangers.empty());
 	return true;
 }
