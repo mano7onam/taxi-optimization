@@ -29,7 +29,7 @@ typedef long long ll;
 // 0 - no score logging
 // 1 - log only total score in the end
 // 2 - log all passangers' score in the end
-#define _SCORE_LOG 2
+#define _SCORE_LOG 1
 
 // declarations
 class Interactor;
@@ -149,6 +149,10 @@ public:
 
 	int ordersCount() const; // number of different passangers we want to take
 	bool isEmpty() { return v.empty(); }
+
+	// estimate score we will get for performing this commands list
+	// if we assign it to certain taxi
+	double estimateScore(const Taxi& taxi);
 
 protected:
 	deque<Command> v; // reversed order
@@ -271,19 +275,44 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 		sol->addPassanger(env->getLastPassanger());
 	}
 
-	auto psngrs = sol->getWaitingPassangers(); // unredistributed to taxis passangers
+	auto psngrs = sol->getWaitingPassangers(); // undistributed to taxis passangers
 
 	map<int, CommandsSequence> c;
 	int noTaxiIter = 0;
 	while (!psngrs.empty()) {
-		noTaxiIter++;
-		random_shuffle(taxis.begin(), taxis.end());
-		auto taxi = *taxis.begin();
-		if (!taxi.freeSeats()) continue;
-		if (taxi.ordersCount() && noTaxiIter < 1000) continue;
-		noTaxiIter = 0;
+		int bestTaxiId = -1;
+		double bestAddition = -1e9;
 
-		int bestId = psngrs.begin()->first;
+		Passanger p = psngrs.begin()->second;
+		psngrs.erase(p.id());
+		sol->distributePassanger(p);
+		Command takePas = Command(p.from(), p.id());
+		Command dropPas = Command(p.to(), -p.id());
+
+		for (auto& taxi : taxis) {
+			if (!taxi.freeSeats()) continue;
+			CommandsSequence commands = c.count(taxi.id()) ? c[taxi.id()] : taxi.commands();
+			double wasScore = commands.estimateScore(taxi);
+			commands.addCommand(takePas);
+			commands.addCommand(dropPas);
+			double becomeScore = commands.estimateScore(taxi);
+			double addition = becomeScore - wasScore;
+			if (addition > bestAddition) {
+				bestAddition = addition;
+				bestTaxiId = taxi.id();
+			}
+		}
+		assert(bestAddition + 1e-12 >= 0);
+		// updating taxi info
+		for (auto& taxi : taxis) {
+			if (taxi.id() != bestTaxiId) continue;
+			if (!c.count(taxi.id())) {
+				c[taxi.id()] = taxi.commands();
+			}
+			c[taxi.id()].addCommand(takePas);
+			c[taxi.id()].addCommand(dropPas);
+		}
+		/*int bestId = psngrs.begin()->first;
 		int minSum = 1e9 + 7;
 		for (auto el : psngrs) {
 			int curSum = getDistance(taxi.pos(), el.second.from()) + el.second.getPathLength();
@@ -298,11 +327,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 		sol->distributePassanger(p);
 		if (!c.count(taxi.id())) {
 			c[taxi.id()] = taxi.commands();
-		}
-		Command take_pas = Command(p.from(), p.id());
-		Command drop_pas = Command(p.to(), -p.id());
-		c[taxi.id()].addCommand(take_pas);
-		c[taxi.id()].addCommand(drop_pas);
+		}*/
 	}
 	return c;
 }
@@ -576,6 +601,7 @@ Point Command::performPart(const Point &from, int haveTime) {
 	return Point(resX, resY);
 }
 
+// CommandsSequence ==================================================================================
 int CommandsSequence::ordersCount() const {
 	// TODO: check that passangers are different
 	int res = 0;
@@ -583,6 +609,34 @@ int CommandsSequence::ordersCount() const {
 		if (el.getA() > 0) {
 			res++;
 		}
+	}
+	return res;
+}
+
+double CommandsSequence::estimateScore(const Taxi & taxi) {
+	int nowTime = env->time();
+	Point p = taxi.pos();
+	IdToPassMap passangers; // list of passanger which will be delivered by this command
+	for (auto& command : v) {
+		int a = command.getA();
+		if (a == 0) continue;
+		int id = abs(a);
+		Point nxt_p = command.getPoint();
+		nowTime += getDistance(p, nxt_p);
+		p = nxt_p;
+		if (!passangers.count(id)) {
+			passangers[id] = env->getAllPassangerById(id);
+		}
+		if (a > 0) {
+			passangers[id].setWaitingTime(nowTime - env->time());
+		}
+		else {
+			passangers[id].setTotalDuration(nowTime - env->time());
+		}
+	}
+	double res = 0.0;
+	for (auto& el : passangers) {
+		res += el.second.getScore();
 	}
 	return res;
 }
