@@ -127,13 +127,12 @@ class CommandsSequence {
 public:
 	int size() { return v.size(); }
 	const deque<Command> getCommands() { return v; }
-
 	Command getFirst() const { return v.front(); }
 
 	void popFirst() { v.pop_front(); }
-
 	void addCommand(const Command &comm) { v.push_back(comm); }
 
+	int ordersCount() const; // number of different passangers we want to take
 	bool isEmpty() { return v.empty(); }
 
 protected:
@@ -176,6 +175,7 @@ public:
 	Point pos() const { return _pos; }
 	const CommandsSequence& commands() const { return _commands; }
 	const PassangersSet& passangers() const { return _passangers; }
+	int ordersCount() const { return _commands.ordersCount(); } // number of passangers distributed to this taxi
 
 	void update(int prevTime, int curTime);
 	void updateCommands(CommandsSequence commands) { _commands = commands; }
@@ -249,20 +249,24 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 	auto psngrs = sol->getWaitingPassangers(); // unredistributed to taxis passangers
 
 	map<int, CommandsSequence> c;
+	int no_taxi_iter = 0;
 	while (!psngrs.empty()) {
+		no_taxi_iter++;
 		random_shuffle(taxis.begin(), taxis.end());
 		auto taxi = *taxis.begin();
 		if (!taxi.freeSeats()) continue;
+		if (taxi.ordersCount() && no_taxi_iter < 1000) continue;
+		no_taxi_iter = 0;
 
-    int bestId = psngrs.begin()->first;
-    int minSum = 1e9+7;
-    for (auto el : psngrs) {
-      int curSum = getDistance(taxi.pos(), el.second.from()) + el.second.getPathLength();
-      if (curSum < minSum) {
-        minSum = curSum;
-        bestId = el.first;
-      }
-    }
+		int bestId = psngrs.begin()->first;
+		int minSum = 1e9 + 7;
+		for (auto el : psngrs) {
+			int curSum = getDistance(taxi.pos(), el.second.from()) + el.second.getPathLength();
+			if (curSum < minSum) {
+				minSum = curSum;
+				bestId = el.first;
+			}
+		}
 
 		Passanger p = psngrs[bestId];
 		psngrs.erase(bestId);
@@ -492,4 +496,15 @@ Point Command::performPart(const Point &from, int haveTime) {
 	}
 
 	return Point(resX, resY);
+}
+
+int CommandsSequence::ordersCount() const {
+	// TODO: check that passangers are different
+	int res = 0;
+	for (auto el : v) {
+		if (el.getA() > 0) {
+			res++;
+		}
+	}
+	return res;
 }
