@@ -168,6 +168,9 @@ public:
 	// if we assign it to certain taxi
 	double estimateScore(const Taxi& taxi);
 
+	deque<Command>::iterator begin() { return v.begin(); }
+	deque<Command>::iterator end() { return v.end(); }
+
 protected:
 	deque<Command> v; // reversed order
 };
@@ -717,7 +720,21 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 			}
 		}
 		commands = bestSequence;
+	} else {
+		// TODO: when a is zero for a command, it must be at the end
+		// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
+		CommandsSequence betterSequence;
+		vector<Command> zeroCommands;
+		for (auto command : commands) {
+			if (0 == command.getA()) {
+				zeroCommands.push_back(command);
+			} else {
+				betterSequence.addCommand(command);
+			}
+		}
+		for (auto command : zeroCommands) {
+			betterSequence.addCommand(command);
+		}
+		commands = betterSequence;
 	}
-	// TODO: when a is zero for a command, it must be at the end
-	// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
 }
