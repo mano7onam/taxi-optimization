@@ -23,6 +23,11 @@
 using namespace std;
 typedef long long ll;
 
+const int INF = 1e9 + 7;
+const double DOUBLE_INF = 1e9;
+const double EPS = 1e-12;
+
+
 // defines
 #define LOG cout
 
@@ -221,7 +226,7 @@ public:
 	void addPassanger(const Passanger &p);
 	void delPassanger(const Passanger &p);
 
-	int freeSeats() { return 4 - _passangers.size(); }
+	int freeSeats() { return 4 - (int)_passangers.size(); }
 
 protected:
 	int _id;
@@ -300,7 +305,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 	// TODO: after some taxi moves, unused taxi should stay more unirormly on the map
 	while (!psngrs.empty()) {
 		int bestTaxiId = -1;
-		double bestAddition = -1e9;
+		double bestAddition = -DOUBLE_INF;
 
 		Passanger p = psngrs.begin()->second;
 		psngrs.erase(p.id());
@@ -322,7 +327,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 				bestTaxiId = taxi.id();
 			}
 		}
-		assert(bestAddition + 1e-12 >= 0);
+		assert(bestAddition + EPS >= 0);
 		// updating taxi info
 		for (auto& taxi : taxis) {
 			if (taxi.id() != bestTaxiId) continue;
@@ -401,7 +406,7 @@ void Environment::update(const Passanger &passanger) {
 
 void Environment::finishUpdate() {
 	int prevTime = _time;
-	_time = 1e8;
+	_time = INF;
 	for (auto& el : _taxis) {
 		el.update(prevTime, time());
 	}
@@ -500,8 +505,9 @@ void Passanger::ask() {
 
 Passanger::Passanger() {
 	_time = 0;
-	_waitingTime = -1;   // unitialized
-	_totalDuration = -1; // unitialized
+  _id = -1; // uninitialized
+	_waitingTime = -1;   // uninitialized
+	_totalDuration = -1; // uninitialized
 }
 
 bool Passanger::isStart() const {
