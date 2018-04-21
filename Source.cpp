@@ -505,7 +505,7 @@ void Passanger::ask() {
 
 Passanger::Passanger() {
 	_time = 0;
-  _id = -1; // uninitialized
+	_id = -1; // uninitialized
 	_waitingTime = -1;   // uninitialized
 	_totalDuration = -1; // uninitialized
 }
