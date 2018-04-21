@@ -74,8 +74,8 @@ protected:
 	int _time;
 	int _width;
 	int _height;
-	int _max_psng_id;
-	int _max_taxi_id;
+	int _maxPsngId;
+	int _maxTaxiId;
 	vector<Taxi> _taxis;
 	map<int, Passanger> _wayPassangers;
 	map<int, Passanger> _freePassangers;
@@ -249,14 +249,14 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 	auto psngrs = sol->getWaitingPassangers(); // unredistributed to taxis passangers
 
 	map<int, CommandsSequence> c;
-	int no_taxi_iter = 0;
+	int noTaxiIter = 0;
 	while (!psngrs.empty()) {
-		no_taxi_iter++;
+		noTaxiIter++;
 		random_shuffle(taxis.begin(), taxis.end());
 		auto taxi = *taxis.begin();
 		if (!taxi.freeSeats()) continue;
-		if (taxi.ordersCount() && no_taxi_iter < 1000) continue;
-		no_taxi_iter = 0;
+		if (taxi.ordersCount() && noTaxiIter < 1000) continue;
+		noTaxiIter = 0;
 
 		int bestId = psngrs.begin()->first;
 		int minSum = 1e9 + 7;
@@ -323,12 +323,12 @@ void Environment::ask() {
 
 Environment::Environment() {
 	_time = 0;
-	_max_psng_id = 0;
-	_max_taxi_id = 0;
+	_maxPsngId = 0;
+	_maxTaxiId = 0;
 }
 
 const Passanger Environment::getLastPassanger() const {
-	int last_id = _max_psng_id;
+	int last_id = _maxPsngId;
 	return _freePassangers.at(last_id);
 }
 
@@ -342,11 +342,11 @@ void Environment::update(const Passanger &passanger) {
 }
 
 int Environment::takeNextPassangerId() {
-	return ++_max_psng_id;
+	return ++_maxPsngId;
 }
 
 int Environment::takeNextTaxiId() {
-	return ++_max_taxi_id;
+	return ++_maxTaxiId;
 }
 
 void Environment::commit(map<int, CommandsSequence>& c) {
