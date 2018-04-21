@@ -29,7 +29,7 @@ typedef long long ll;
 // 0 - no score logging
 // 1 - log only total score in the end
 // 2 - log all passangers' score in the end
-#define _SCORE_LOG 1
+#define _SCORE_LOG 2
 
 // declarations
 class Interactor;
@@ -278,7 +278,7 @@ public:
 private:
 	map<int, Passanger> _waitingPassangers; // list of undistributed to taxis passangers
 
-	const int FULL_REORDER_LIMIT = 7;
+	const int FULL_REORDER_LIMIT = 8;
 };
 
 // main solution function
@@ -292,6 +292,12 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 
 	map<int, CommandsSequence> c;
 	int noTaxiIter = 0;
+	// TODO: right now if we disctributed a passanger to a taxi, he will never
+	// change his taxi, so, all psngrs distributed the in order of queries
+	// Need to write heurisctic. The easiest way - to clear all passangers, shuffle them,
+	// try to distribute to taxis and extimate score. Do this a few times, and choose the best
+	// shuffle.
+	// TODO: after some taxi moves, unused taxi should stay more unirormly on the map
 	while (!psngrs.empty()) {
 		int bestTaxiId = -1;
 		double bestAddition = -1e9;
@@ -614,6 +620,24 @@ int CommandsSequence::ordersCount() const {
 
 bool CommandsSequence::isCorrect() const {
 	list<int> openedPassangers;
+
+	// there are possible commands which are partially done
+	// when passanger is already in the taxi. So, we mark all
+	// these passangers as already opened
+	for (auto it = v.rbegin(); it != v.rend(); ++it) {
+		Command command = *it;
+		int a = command.getA();
+		if (a < 0) openedPassangers.push_back(-a);
+		else {
+			auto it = find(openedPassangers.begin(), openedPassangers.end(), a);
+			if (it == openedPassangers.end()) {
+				return false;
+			}
+			openedPassangers.erase(it);
+		}
+	}
+
+	// checking capacity
 	for (auto& command : v) {
 		int a = command.getA();
 		if (a == 0) continue;
@@ -624,13 +648,10 @@ bool CommandsSequence::isCorrect() const {
 				return false;
 			}
 		} else {
-			auto it = find(openedPassangers.begin(), openedPassangers.end(), id);
-			if (it == openedPassangers.end()) {
-				return false;
-			}
-			openedPassangers.erase(it);
+			openedPassangers.remove(id);
 		}
 	}
+	assert(openedPassangers.empty());
 	return true;
 }
 
@@ -649,10 +670,10 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 			passangers[id] = env->getAllPassangerById(id);
 		}
 		if (a > 0) {
-			passangers[id].setWaitingTime(nowTime - env->time());
+			passangers[id].setWaitingTime(nowTime - passangers[id].time());
 		}
 		else {
-			passangers[id].setTotalDuration(nowTime - env->time());
+			passangers[id].setTotalDuration(nowTime - passangers[id].time());
 		}
 	}
 	double res = 0.0;
@@ -663,6 +684,7 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 }
 
 // SolutionEnvironment ==================================================================================
+
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
 	if (commands.size() < FULL_REORDER_LIMIT) {
 		int fact = 1;
@@ -682,5 +704,6 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		}
 		commands = bestSequence;
 	}
+	// TODO: when a is zero for a command, it must be at the end
 	// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
 }
