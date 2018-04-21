@@ -295,7 +295,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 
 	auto psngrs = sol->getWaitingPassangers(); // undistributed to taxis passangers
 
-	map<int, CommandsSequence> c;
+	map<int, CommandsSequence> mTaxiCommands;
 	int noTaxiIter = 0;
 	// TODO: right now if we disctributed a passanger to a taxi, he will never
 	// change his taxi, so, all psngrs distributed the in order of queries
@@ -315,7 +315,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 
 		for (auto& taxi : taxis) {
 			if (!taxi.freeSeats()) continue;
-			CommandsSequence commands = c.count(taxi.id()) ? c[taxi.id()] : taxi.commands();
+			CommandsSequence commands = mTaxiCommands.count(taxi.id()) ? mTaxiCommands[taxi.id()] : taxi.commands();
 			double wasScore = commands.estimateScore(taxi);
 			commands.addCommand(takePas);
 			commands.addCommand(dropPas);
@@ -331,15 +331,15 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 		// updating taxi info
 		for (auto& taxi : taxis) {
 			if (taxi.id() != bestTaxiId) continue;
-			if (!c.count(taxi.id())) {
-				c[taxi.id()] = taxi.commands();
+			if (!mTaxiCommands.count(taxi.id())) {
+				mTaxiCommands[taxi.id()] = taxi.commands();
 			}
-			c[taxi.id()].addCommand(takePas);
-			c[taxi.id()].addCommand(dropPas);
-			sol->optimizeCommandsOrder(c[taxi.id()], taxi);
+			mTaxiCommands[taxi.id()].addCommand(takePas);
+			mTaxiCommands[taxi.id()].addCommand(dropPas);
+			sol->optimizeCommandsOrder(mTaxiCommands[taxi.id()], taxi);
 		}
 	}
-	return c;
+	return mTaxiCommands;
 }
 
 void updateAndCommit(UpdateState state) {
@@ -669,9 +669,9 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 		int a = command.getA();
 		if (a == 0) continue;
 		int id = abs(a);
-		Point nxt_p = command.getPoint();
-		nowTime += getDistance(p, nxt_p);
-		p = nxt_p;
+		Point nxtP = command.getPoint();
+		nowTime += getDistance(p, nxtP);
+		p = nxtP;
 		if (!passangers.count(id)) {
 			passangers[id] = env->getAllPassangerById(id);
 		}
