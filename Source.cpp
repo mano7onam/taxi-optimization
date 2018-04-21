@@ -116,6 +116,8 @@ public:
 
 	bool operator ==(const Point& b) { return x == b.getX() && y == b.getY(); }
 
+	string toString() const;
+
 protected:
 	int x;
 	int y;
@@ -199,7 +201,7 @@ public:
 	void setTotalDuration(int duration) { _totalDuration = duration; }
 	double getScore() const;
 
-	string toString() const { return ""; } // TODO
+	string toString() const;
 
 protected:
 	int _id;
@@ -498,6 +500,15 @@ static int getDistance(const Point &a, const Point &b) {
 	return abs(a.getX() - b.getX()) + abs(a.getY() - b.getY());
 }
 
+string Point::toString() const {
+	stringstream ss;
+	ss << "(" << x << ", " << y << ")";
+
+	string str;
+	ss >> str;
+	return str;
+}
+
 // Passenger ==================================================================================
 void Passenger::ask() {
 	_id = env->takeNextPassengerId();
@@ -533,6 +544,16 @@ double Passenger::getScore() const {
 	double d2 = _totalDuration - _waitingTime - w0;
 	double alpha = (t - min(d1 * d1 + d2 * d2, t)) / t;
 	return (ll)(alpha * (100 + w0) + 0.5);
+}
+
+string Passenger::toString() const {
+	stringstream ss;
+	ss << "P( #" << _id << " " << " time: " << _time << " ";
+	ss << "from: " << _pFrom.toString() << " to: " << _pTo.toString() << ")";
+
+	string str;
+	ss >> str;
+	return str;
 }
 
 // Taxi ==================================================================================
