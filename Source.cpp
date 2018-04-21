@@ -1,5 +1,5 @@
 #define _CRT_SECURE_NO_WARNINGS
-//#pragma comment(linker, "/STACK:10034217728")
+#pragma comment(linker, "/STACK:10034217728")
 #include <iostream>
 #include <cstdio>
 #include <vector>
@@ -23,6 +23,14 @@
 using namespace std;
 typedef long long ll;
 
+// defines
+#define LOG cout
+
+// 0 - no score logging
+// 1 - log only total score in the end
+// 2 - log all passangers' score in the end
+#define _SCORE_LOG 2
+
 // declarations
 class Interactor;
 class Environment;
@@ -34,6 +42,7 @@ class Passanger;
 class Taxi;
 class SolutionEnvironment;
 using PassangersSet = set<Passanger>;
+using IdToPassMap = map<int, Passanger>;
 
 // globals
 Environment* env;
@@ -57,11 +66,14 @@ public:
 	const map<int, Passanger>& getFreePassangers() const { return _freePassangers; }
 	const vector<Taxi>& getTaxis() const { return _taxis; }
 	const Passanger getLastPassanger() const;
+	//const IdToPassMap getAllPassangers() const { return _allPassangers; } // no need in this?
 
 	void update(const Passanger &passanger);
+	void finishUpdate(); // updates state after passanger finished (with inf time)
 
 	Passanger getFreePassangerById(int id);
-  Passanger getWayPassangerById(int id);
+	Passanger getWayPassangerById(int id);
+	Passanger& getAllPassangerById(int id);
 	void setPassangerInWayById(int id);
 	void delWayPassangerById(int id);
 	
@@ -70,6 +82,8 @@ public:
 
 	void commit(map<int, CommandsSequence>& c);
 
+	void finishLog();
+
 protected:
 	int _time;
 	int _width;
@@ -77,8 +91,9 @@ protected:
 	int _maxPsngId;
 	int _maxTaxiId;
 	vector<Taxi> _taxis;
-	map<int, Passanger> _wayPassangers;
-	map<int, Passanger> _freePassangers;
+	IdToPassMap _wayPassangers;
+	IdToPassMap _freePassangers;
+	IdToPassMap _allPassangers; // used to check score in the end
 };
 
 // position on plane
@@ -148,21 +163,31 @@ public:
 	// getters
 	int id() const { return _id; }
 	int time() const { return _time; }
-	Point from() const { return _p_from; }
-	Point to() const { return _p_to; }
+	Point from() const { return _pFrom; }
+	Point to() const { return _pTo; }
 
 	bool isStart()  const;
 	bool isFinish() const;
 
 	bool operator < (const Passanger &p) const { return _id < p._id; }
+	
+	int getPathLength();
+	int getIdealDuration() const { return getDistance(_pFrom, _pTo); } // w0 from statements
 
-  int getPathLength();
+	void setWaitingTime(int waitingTime) { _waitingTime = waitingTime; }
+	void setTotalDuration(int duration) { _totalDuration = duration; }
+	double getScore() const;
+
+	string toString() const { return ""; } // TODO
 
 protected:
 	int _id;
 	int _time;     // time when this passanger appeared
-	Point _p_from;
-	Point _p_to;
+	Point _pFrom;
+	Point _pTo;
+
+	int _waitingTime;   // d1 for score calculation
+	int _totalDuration; // used for d2 calculation
 };
 
 class Taxi {
@@ -301,6 +326,8 @@ void solve() {
 		passanger.ask();
 	}
 	updateAndCommit(ST_FINISH);
+	env->finishUpdate();
+	env->finishLog();
 }
 
 int main() {
@@ -334,8 +361,17 @@ const Passanger Environment::getLastPassanger() const {
 
 void Environment::update(const Passanger &passanger) {
 	_freePassangers[passanger.id()] = passanger;
+	_allPassangers[passanger.id()] = passanger;
 	int prevTime = _time;
 	_time = passanger.time();
+	for (auto& el : _taxis) {
+		el.update(prevTime, time());
+	}
+}
+
+void Environment::finishUpdate() {
+	int prevTime = _time;
+	_time = 1e8;
 	for (auto& el : _taxis) {
 		el.update(prevTime, time());
 	}
@@ -356,6 +392,28 @@ void Environment::commit(map<int, CommandsSequence>& c) {
 	}
 }
 
+void Environment::finishLog() {
+#ifndef _LOCAL_TEST
+	return;
+#endif // _LOCAL_TEST
+	if (_SCORE_LOG >= 2) {
+		LOG << "\n\nSCORE BY PASSANGERS =====================\n";
+		for (auto& el : _allPassangers) {
+			Passanger& p = el.second;
+			LOG << "pass " << p.toString() << " score = " << p.getScore() << "\n";
+		}
+	}
+	if (_SCORE_LOG >= 1) {
+		double totalScore = 0;
+		for (auto& el : _allPassangers) {
+			Passanger& p = el.second;
+			totalScore += p.getScore();
+		}
+		totalScore /= (double)_allPassangers.size();
+		LOG << "\nTotal score = " << (ll)(totalScore + 0.5) << "\n";
+	}
+}
+
 Passanger Environment::getFreePassangerById(int id) {
 	assert(_freePassangers.count(id) != 0);
 	return _freePassangers[id];
@@ -371,6 +429,10 @@ void Environment::setPassangerInWayById(int id) {
 Passanger Environment::getWayPassangerById(int id) {
   assert(_wayPassangers.count(id) != 0);
   return _wayPassangers[id];
+}
+
+Passanger & Environment::getAllPassangerById(int id) {
+	return _allPassangers[id];
 }
 
 void Environment::delWayPassangerById(int id) {
@@ -402,12 +464,14 @@ static int getDistance(const Point &a, const Point &b) {
 void Passanger::ask() {
 	_id = env->takeNextPassangerId();
 	_time = interactor->askInt();
-	_p_from.ask();
-	_p_to.ask();
+	_pFrom.ask();
+	_pTo.ask();
 }
 
 Passanger::Passanger() {
 	_time = 0;
+	_waitingTime = -1;   // unitialized
+	_totalDuration = -1; // unitialized
 }
 
 bool Passanger::isStart() const {
@@ -419,7 +483,17 @@ bool Passanger::isFinish() const {
 }
 
 int Passanger::getPathLength() {
-  return getDistance(_p_from, _p_to);
+  return getDistance(_pFrom, _pTo);
+}
+
+double Passanger::getScore() const {
+	assert(_waitingTime != -1 && _totalDuration != -1);
+	double t = 1e7;
+	double d1 = _waitingTime;
+	int w0 = getIdealDuration();
+	double d2 = _totalDuration - _waitingTime - w0;
+	double alpha = (t - min(d1 * d1 + d2 * d2, t)) / t;
+	return (ll)(alpha * (100 + w0) + 0.5);
 }
 
 // Taxi ==================================================================================
@@ -442,11 +516,13 @@ void Taxi::delPassanger(const Passanger &p) {
 }
 
 void Taxi::update(int prevTime, int curTime) {
-	int restTime = curTime - prevTime;
+	const int timeDiff = curTime - prevTime;
+	int restTime = timeDiff;
 	while (!_commands.isEmpty()) {
 		auto firstComm = _commands.getFirst();
 		int needTime = firstComm.getTimeToPerform(_pos);
 		if (needTime <= restTime) {
+			int nowTime = prevTime + (timeDiff - (restTime - needTime)); // env time when this command will be done
 			_commands.popFirst();
 			_pos = firstComm.getPoint();
 			
@@ -456,12 +532,14 @@ void Taxi::update(int prevTime, int curTime) {
 				assert(p.from() == _pos);
 				addPassanger(p);
 				env->setPassangerInWayById(idPassanger);
+				env->getAllPassangerById(idPassanger).setWaitingTime(nowTime - p.time());
 			} else if (idPassanger < 0) {
 				idPassanger = -idPassanger;
 				Passanger p = env->getWayPassangerById(idPassanger);
 				assert(p.to() == _pos);
 				delPassanger(p);
 				env->delWayPassangerById(idPassanger);
+				env->getAllPassangerById(idPassanger).setTotalDuration(nowTime - p.time());
 			}
 			
 			restTime -= needTime;
