@@ -505,7 +505,7 @@ string Point::toString() const {
 	ss << "(" << x << ", " << y << ")";
 
 	string str;
-	ss >> str;
+	getline(ss, str);
 	return str;
 }
 
@@ -552,7 +552,7 @@ string Passenger::toString() const {
 	ss << "from: " << _pFrom.toString() << " to: " << _pTo.toString() << ")";
 
 	string str;
-	ss >> str;
+	getline(ss, str);
 	return str;
 }
 
