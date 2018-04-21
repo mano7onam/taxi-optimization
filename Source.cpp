@@ -33,7 +33,7 @@ const double EPS = 1e-12;
 
 // 0 - no score logging
 // 1 - log only total score in the end
-// 2 - log all passangers' score in the end
+// 2 - log all passengers' score in the end
 #define _SCORE_LOG 2
 
 // declarations
@@ -43,11 +43,11 @@ class Environment;
 class Point;
 class Command;
 class CommandsSequence;
-class Passanger;
+class Passenger;
 class Taxi;
 class SolutionEnvironment;
-using PassangersSet = set<Passanger>;
-using IdToPassMap = map<int, Passanger>;
+using PassengersSet = set<Passenger>;
+using IdToPassMap = map<int, Passenger>;
 
 // globals
 Environment* env;
@@ -68,21 +68,21 @@ public:
 	int width() const { return _width; }
 	int height() const { return _height; }
 
-	const map<int, Passanger>& getFreePassangers() const { return _freePassangers; }
+	const map<int, Passenger>& getFreePassengers() const { return _freePassengers; }
 	const vector<Taxi>& getTaxis() const { return _taxis; }
-	const Passanger getLastPassanger() const;
-	//const IdToPassMap getAllPassangers() const { return _allPassangers; } // no need in this?
+	const Passenger getLastPassenger() const;
+	//const IdToPassMap getAllPassengers() const { return _allPassengers; } // no need in this?
 
-	void update(const Passanger &passanger);
-	void finishUpdate(); // updates state after passanger finished (with inf time)
+	void update(const Passenger &passenger);
+	void finishUpdate(); // updates state after passenger finished (with inf time)
 
-	Passanger getFreePassangerById(int id);
-	Passanger getWayPassangerById(int id);
-	Passanger& getAllPassangerById(int id);
-	void setPassangerInWayById(int id);
-	void delWayPassangerById(int id);
+	Passenger getFreePassengerById(int id);
+	Passenger getWayPassengerById(int id);
+	Passenger& getAllPassengerById(int id);
+	void setPassengerInWayById(int id);
+	void delWayPassengerById(int id);
 	
-	int takeNextPassangerId();
+	int takeNextPassengerId();
 	int takeNextTaxiId();
 
 	void commit(map<int, CommandsSequence>& c);
@@ -96,9 +96,9 @@ protected:
 	int _maxPsngId;
 	int _maxTaxiId;
 	vector<Taxi> _taxis;
-	IdToPassMap _wayPassangers;
-	IdToPassMap _freePassangers;
-	IdToPassMap _allPassangers; // used to check score in the end
+	IdToPassMap _wayPassengers;
+	IdToPassMap _freePassengers;
+	IdToPassMap _allPassengers; // used to check score in the end
 };
 
 // position on plane
@@ -158,7 +158,7 @@ public:
 	void popFirst() { v.pop_front(); }
 	void addCommand(const Command &comm) { v.push_back(comm); }
 
-	int ordersCount() const; // number of different passangers we want to take
+	int ordersCount() const; // number of different passengers we want to take
 	bool isCorrect() const; // check order and that taxi capacity is enough to perform this sequence
 	bool isEmpty() { return v.empty(); }
 
@@ -175,11 +175,11 @@ protected:
 	deque<Command> v; // reversed order
 };
 
-class Passanger {
+class Passenger {
 public:
 	void ask();
 
-	Passanger();
+	Passenger();
 
 	// getters
 	int id() const { return _id; }
@@ -190,7 +190,7 @@ public:
 	bool isStart()  const;
 	bool isFinish() const;
 
-	bool operator < (const Passanger &p) const { return _id < p._id; }
+	bool operator < (const Passenger &p) const { return _id < p._id; }
 	
 	int getPathLength();
 	int getIdealDuration() const { return getDistance(_pFrom, _pTo); } // w0 from statements
@@ -203,7 +203,7 @@ public:
 
 protected:
 	int _id;
-	int _time;     // time when this passanger appeared
+	int _time;     // time when this passenger appeared
 	Point _pFrom;
 	Point _pTo;
 
@@ -220,22 +220,22 @@ public:
 	int id() const { return _id; }
 	Point pos() const { return _pos; }
 	const CommandsSequence& commands() const { return _commands; }
-	const PassangersSet& passangers() const { return _passangers; }
-	int ordersCount() const { return _commands.ordersCount(); } // number of passangers distributed to this taxi
+	const PassengersSet& passengers() const { return _passengers; }
+	int ordersCount() const { return _commands.ordersCount(); } // number of passengers distributed to this taxi
 
 	void update(int prevTime, int curTime);
 	void updateCommands(CommandsSequence commands) { _commands = commands; }
 
-	void addPassanger(const Passanger &p);
-	void delPassanger(const Passanger &p);
+	void addPassenger(const Passenger &p);
+	void delPassenger(const Passenger &p);
 
-	int freeSeats() { return 4 - (int)_passangers.size(); }
+	int freeSeats() { return 4 - (int)_passengers.size(); }
 
 protected:
 	int _id;
 	Point _pos;
 	CommandsSequence _commands;
-	PassangersSet _passangers;
+	PassengersSet _passengers;
 };
 
 
@@ -277,14 +277,14 @@ enum UpdateState {
 
 class SolutionEnvironment {
 public:
-	const map<int, Passanger>& getWaitingPassangers() const { return _waitingPassangers; }
-	void distributePassanger(const Passanger& p) { _waitingPassangers.erase(p.id()); }
-	void addPassanger(const Passanger& p) { _waitingPassangers[p.id()] = p; }
+	const map<int, Passenger>& getWaitingPassengers() const { return _waitingPassengers; }
+	void distributePassenger(const Passenger &p) { _waitingPassengers.erase(p.id()); }
+	void addPassenger(const Passenger &p) { _waitingPassengers[p.id()] = p; }
 
 	// reorder commands to get maximum score from it
 	void optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const;
 private:
-	map<int, Passanger> _waitingPassangers; // list of undistributed to taxis passangers
+	map<int, Passenger> _waitingPassengers; // list of undistributed to taxis passengers
 
 	const int FULL_REORDER_LIMIT = 8;
 };
@@ -293,16 +293,16 @@ private:
 map<int, CommandsSequence> calcCommands(UpdateState state) {
 	vector<Taxi> taxis = env->getTaxis();
 	if (state == ST_NORMAL) {
-		sol->addPassanger(env->getLastPassanger());
+		sol->addPassenger(env->getLastPassenger());
 	}
 
-	auto psngrs = sol->getWaitingPassangers(); // undistributed to taxis passangers
+	auto psngrs = sol->getWaitingPassengers(); // undistributed to taxis passengers
 
 	map<int, CommandsSequence> mTaxiCommands;
 	int noTaxiIter = 0;
-	// TODO: right now if we disctributed a passanger to a taxi, he will never
+	// TODO: right now if we distributed a passenger to a taxi, he will never
 	// change his taxi, so, all psngrs distributed the in order of queries
-	// Need to write heurisctic. The easiest way - to clear all passangers, shuffle them,
+	// Need to write heurisctic. The easiest way - to clear all passengers, shuffle them,
 	// try to distribute to taxis and extimate score. Do this a few times, and choose the best
 	// shuffle.
 	// TODO: after some taxi moves, unused taxi should stay more unirormly on the map
@@ -310,9 +310,9 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 		int bestTaxiId = -1;
 		double bestAddition = -DOUBLE_INF;
 
-		Passanger p = psngrs.begin()->second;
+		Passenger p = psngrs.begin()->second;
 		psngrs.erase(p.id());
-		sol->distributePassanger(p);
+		sol->distributePassenger(p);
 		Command takePas = Command(p.from(), p.id());
 		Command dropPas = Command(p.to(), -p.id());
 
@@ -356,12 +356,12 @@ void solve() {
 	sol = new SolutionEnvironment();
 	env->ask();
 	updateAndCommit(ST_START);
-	Passanger passanger;
-	passanger.ask();
-	while (!passanger.isFinish()) {
-		env->update(passanger);
+	Passenger passenger;
+	passenger.ask();
+	while (!passenger.isFinish()) {
+		env->update(passenger);
 		updateAndCommit(ST_NORMAL);
-		passanger.ask();
+		passenger.ask();
 	}
 	updateAndCommit(ST_FINISH);
 	env->finishUpdate();
@@ -392,16 +392,16 @@ Environment::Environment() {
 	_maxTaxiId = 0;
 }
 
-const Passanger Environment::getLastPassanger() const {
+const Passenger Environment::getLastPassenger() const {
 	int last_id = _maxPsngId;
-	return _freePassangers.at(last_id);
+	return _freePassengers.at(last_id);
 }
 
-void Environment::update(const Passanger &passanger) {
-	_freePassangers[passanger.id()] = passanger;
-	_allPassangers[passanger.id()] = passanger;
+void Environment::update(const Passenger &passenger) {
+	_freePassengers[passenger.id()] = passenger;
+	_allPassengers[passenger.id()] = passenger;
 	int prevTime = _time;
-	_time = passanger.time();
+	_time = passenger.time();
 	for (auto& el : _taxis) {
 		el.update(prevTime, time());
 	}
@@ -415,7 +415,7 @@ void Environment::finishUpdate() {
 	}
 }
 
-int Environment::takeNextPassangerId() {
+int Environment::takeNextPassengerId() {
 	return ++_maxPsngId;
 }
 
@@ -435,47 +435,47 @@ void Environment::finishLog() {
 	return;
 #endif // _LOCAL_TEST
 	if (_SCORE_LOG >= 2) {
-		LOG << "\n\nSCORE BY PASSANGERS =====================\n";
-		for (auto& el : _allPassangers) {
-			Passanger& p = el.second;
+		LOG << "\n\nSCORE BY PASSENGERS =====================\n";
+		for (auto& el : _allPassengers) {
+			Passenger& p = el.second;
 			LOG << "pass " << p.toString() << " score = " << p.getScore() << "\n";
 		}
 	}
 	if (_SCORE_LOG >= 1) {
 		double totalScore = 0;
-		for (auto& el : _allPassangers) {
-			Passanger& p = el.second;
+		for (auto& el : _allPassengers) {
+			Passenger& p = el.second;
 			totalScore += p.getScore();
 		}
-		totalScore /= (double)_allPassangers.size();
+		totalScore /= (double)_allPassengers.size();
 		LOG << "\nTotal score = " << (ll)(totalScore + 0.5) << "\n";
 	}
 }
 
-Passanger Environment::getFreePassangerById(int id) {
-	assert(_freePassangers.count(id) != 0);
-	return _freePassangers[id];
+Passenger Environment::getFreePassengerById(int id) {
+	assert(_freePassengers.count(id) != 0);
+	return _freePassengers[id];
 }
 
-void Environment::setPassangerInWayById(int id) {
-	assert(_freePassangers.count(id) != 0);
-	Passanger p = _freePassangers[id];
-	_freePassangers.erase(id);
-	_wayPassangers[id] = p;
+void Environment::setPassengerInWayById(int id) {
+	assert(_freePassengers.count(id) != 0);
+	Passenger p = _freePassengers[id];
+	_freePassengers.erase(id);
+	_wayPassengers[id] = p;
 }
 
-Passanger Environment::getWayPassangerById(int id) {
-  assert(_wayPassangers.count(id) != 0);
-  return _wayPassangers[id];
+Passenger Environment::getWayPassengerById(int id) {
+  assert(_wayPassengers.count(id) != 0);
+  return _wayPassengers[id];
 }
 
-Passanger & Environment::getAllPassangerById(int id) {
-	return _allPassangers[id];
+Passenger & Environment::getAllPassengerById(int id) {
+	return _allPassengers[id];
 }
 
-void Environment::delWayPassangerById(int id) {
-	assert(_wayPassangers.count(id) != 0);
-	_wayPassangers.erase(id);
+void Environment::delWayPassengerById(int id) {
+	assert(_wayPassengers.count(id) != 0);
+	_wayPassengers.erase(id);
 }
 
 // Point ==================================================================================
@@ -498,34 +498,34 @@ static int getDistance(const Point &a, const Point &b) {
 	return abs(a.getX() - b.getX()) + abs(a.getY() - b.getY());
 }
 
-// Passanger ==================================================================================
-void Passanger::ask() {
-	_id = env->takeNextPassangerId();
+// Passenger ==================================================================================
+void Passenger::ask() {
+	_id = env->takeNextPassengerId();
 	_time = interactor->askInt();
 	_pFrom.ask();
 	_pTo.ask();
 }
 
-Passanger::Passanger() {
+Passenger::Passenger() {
 	_time = 0;
 	_id = -1; // uninitialized
 	_waitingTime = -1;   // uninitialized
 	_totalDuration = -1; // uninitialized
 }
 
-bool Passanger::isStart() const {
+bool Passenger::isStart() const {
 	return _time == 0;
 }
 
-bool Passanger::isFinish() const {
+bool Passenger::isFinish() const {
 	return _time == -1;
 }
 
-int Passanger::getPathLength() {
+int Passenger::getPathLength() {
   return getDistance(_pFrom, _pTo);
 }
 
-double Passanger::getScore() const {
+double Passenger::getScore() const {
 	assert(_waitingTime != -1 && _totalDuration != -1);
 	double t = 1e7;
 	double d1 = _waitingTime;
@@ -544,14 +544,14 @@ void Taxi::ask() {
 Taxi::Taxi() {
 }
 
-void Taxi::addPassanger(const Passanger &p) {
-	assert(static_cast<int>(_passangers.size()) < 4);
-	_passangers.insert(p);
+void Taxi::addPassenger(const Passenger &p) {
+	assert(static_cast<int>(_passengers.size()) < 4);
+	_passengers.insert(p);
 }
 
-void Taxi::delPassanger(const Passanger &p) {
-	assert(_passangers.count(p));
-	_passangers.erase(p);
+void Taxi::delPassenger(const Passenger &p) {
+	assert(_passengers.count(p));
+	_passengers.erase(p);
 }
 
 void Taxi::update(int prevTime, int curTime) {
@@ -565,20 +565,20 @@ void Taxi::update(int prevTime, int curTime) {
 			_commands.popFirst();
 			_pos = firstComm.getPoint();
 			
-			int idPassanger = firstComm.getA();
-			if (idPassanger > 0) {
-				Passanger p = env->getFreePassangerById(idPassanger);
+			int idPassenger = firstComm.getA();
+			if (idPassenger > 0) {
+				Passenger p = env->getFreePassengerById(idPassenger);
 				assert(p.from() == _pos);
-				addPassanger(p);
-				env->setPassangerInWayById(idPassanger);
-				env->getAllPassangerById(idPassanger).setWaitingTime(nowTime - p.time());
-			} else if (idPassanger < 0) {
-				idPassanger = -idPassanger;
-				Passanger p = env->getWayPassangerById(idPassanger);
+				addPassenger(p);
+				env->setPassengerInWayById(idPassenger);
+				env->getAllPassengerById(idPassenger).setWaitingTime(nowTime - p.time());
+			} else if (idPassenger < 0) {
+				idPassenger = -idPassenger;
+				Passenger p = env->getWayPassengerById(idPassenger);
 				assert(p.to() == _pos);
-				delPassanger(p);
-				env->delWayPassangerById(idPassanger);
-				env->getAllPassangerById(idPassanger).setTotalDuration(nowTime - p.time());
+				delPassenger(p);
+				env->delWayPassengerById(idPassenger);
+				env->getAllPassengerById(idPassenger).setTotalDuration(nowTime - p.time());
 			}
 			
 			restTime -= needTime;
@@ -617,7 +617,7 @@ Point Command::performPart(const Point &from, int haveTime) {
 
 // CommandsSequence ==================================================================================
 int CommandsSequence::ordersCount() const {
-	// TODO: check that passangers are different
+	// TODO: check that passengers are different
 	int res = 0;
 	for (auto el : v) {
 		if (el.getA() > 0) {
@@ -628,11 +628,11 @@ int CommandsSequence::ordersCount() const {
 }
 
 bool CommandsSequence::isCorrect() const {
-	set<int> openedPassangers;
+	set<int> openedPassengers;
 
 	// there are possible commands which are partially done
-	// when passanger is already in the taxi. So, we mark all
-	// these passangers as already opened
+	// when passenger is already in the taxi. So, we mark all
+	// these passengers as already opened
 	for (auto it = v.rbegin(); it != v.rend(); ++it) {
 		Command command = *it;
 		int a = command.getA();
@@ -641,13 +641,13 @@ bool CommandsSequence::isCorrect() const {
 		}
 		int id = abs(a);
 		if (a < 0) {
-			openedPassangers.insert(id);
+			openedPassengers.insert(id);
 		}
 		else {
-			if (!openedPassangers.count(id)) {
+			if (!openedPassengers.count(id)) {
 				return false;
 			}
-			openedPassangers.erase(id);
+			openedPassengers.erase(id);
 		}
 	}
 
@@ -659,23 +659,23 @@ bool CommandsSequence::isCorrect() const {
 		}
 		int id = abs(a);
 		if (a > 0) {
-			openedPassangers.insert(id);
-			if (openedPassangers.size() > 4) {
+			openedPassengers.insert(id);
+			if (openedPassengers.size() > 4) {
 				return false;
 			}
 		} else {
-			openedPassangers.erase(id);
+			openedPassengers.erase(id);
 		}
 	}
 
-	assert(openedPassangers.empty());
+	assert(openedPassengers.empty());
 	return true;
 }
 
 double CommandsSequence::estimateScore(const Taxi & taxi) {
 	int nowTime = env->time();
 	Point p = taxi.pos();
-	IdToPassMap passangers; // list of passanger which will be delivered by this command
+	IdToPassMap passengers; // list of passenger which will be delivered by this command
 	for (auto& command : v) {
 		int a = command.getA();
 		if (a == 0) continue;
@@ -683,18 +683,18 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 		Point nxtP = command.getPoint();
 		nowTime += getDistance(p, nxtP);
 		p = nxtP;
-		if (!passangers.count(id)) {
-			passangers[id] = env->getAllPassangerById(id);
+		if (!passengers.count(id)) {
+			passengers[id] = env->getAllPassengerById(id);
 		}
 		if (a > 0) {
-			passangers[id].setWaitingTime(nowTime - passangers[id].time());
+			passengers[id].setWaitingTime(nowTime - passengers[id].time());
 		}
 		else {
-			passangers[id].setTotalDuration(nowTime - passangers[id].time());
+			passengers[id].setTotalDuration(nowTime - passengers[id].time());
 		}
 	}
 	double res = 0.0;
-	for (auto& el : passangers) {
+	for (auto& el : passengers) {
 		res += el.second.getScore();
 	}
 	return res;
