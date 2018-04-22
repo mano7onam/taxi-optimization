@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <list>
 #include <numeric>
+#include <tuple>
 // #include "Source.h"
 
 using namespace std;
@@ -280,6 +281,9 @@ enum UpdateState {
 class SolutionEnvironment {
 public:
 	const map<int, Passenger>& getWaitingPassengers() const { return _waitingPassengers; }
+	vector<Passenger> getVectorWaitingPassengers() const;
+
+	bool isWaitingPassenger(const Passenger &p) const {return (bool)_waitingPassengers.count(p.id()); }
 	void distributePassenger(const Passenger &p) { _waitingPassengers.erase(p.id()); }
 	void addPassenger(const Passenger &p) { _waitingPassengers[p.id()] = p; }
 
@@ -291,59 +295,73 @@ private:
 	const int FULL_REORDER_LIMIT = 8;
 };
 
+struct Distribution {
+	double addition;
+	Passenger p;
+	Taxi taxi;
+
+	bool operator < (const Distribution &d) const {
+		return addition < d.addition;
+	}
+};
+
 // main solution function
 map<int, CommandsSequence> calcCommands(UpdateState state) {
-	vector<Taxi> taxis = env->getTaxis();
 	if (state == ST_NORMAL) {
 		sol->addPassenger(env->getLastPassenger());
 	}
 
-	auto psngrs = sol->getWaitingPassengers(); // undistributed to taxis passengers
+	auto taxis = env->getTaxis(); // all taxis
+	auto psngrs = sol->getVectorWaitingPassengers(); // undistributed to taxis passengers
 
-	map<int, CommandsSequence> mTaxiCommands;
-	int noTaxiIter = 0;
-	// TODO: right now if we distributed a passenger to a taxi, he will never
-	// change his taxi, so, all psngrs distributed the in order of queries
-	// Need to write heurisctic. The easiest way - to clear all passengers, shuffle them,
-	// try to distribute to taxis and extimate score. Do this a few times, and choose the best
-	// shuffle.
-	// TODO: after some taxi moves, unused taxi should stay more unirormly on the map
-	while (!psngrs.empty()) {
-		int bestTaxiId = -1;
-		double bestAddition = -DOUBLE_INF;
-
-		Passenger p = psngrs.begin()->second;
-		psngrs.erase(p.id());
-		sol->distributePassenger(p);
-		Command takePas = Command(p.from(), p.id());
-		Command dropPas = Command(p.to(), -p.id());
-
-		for (auto& taxi : taxis) {
-			if (!taxi.freeSeats()) continue;
-			CommandsSequence commands = mTaxiCommands.count(taxi.id()) ? mTaxiCommands[taxi.id()] : taxi.commands();
+	set<Distribution> distrib;
+	for (const auto& taxi : taxis) {
+		for (const auto& p : psngrs) {
+			auto takePas = Command(p.from(), p.id());
+			auto dropPas = Command(p.to(), -p.id());
+			auto commands = taxi.commands();
 			double wasScore = commands.estimateScore(taxi);
 			commands.addCommand(takePas);
 			commands.addCommand(dropPas);
 			sol->optimizeCommandsOrder(commands, taxi);
 			double becomeScore = commands.estimateScore(taxi);
 			double addition = becomeScore - wasScore;
-			if (addition > bestAddition) {
-				bestAddition = addition;
-				bestTaxiId = taxi.id();
-			}
+			distrib.insert({-addition, p, taxi});
 		}
-		assert(bestAddition + EPS >= 0);
-		// updating taxi info
-		for (auto& taxi : taxis) {
-			if (taxi.id() != bestTaxiId) continue;
+	}
+
+	map<int, CommandsSequence> mTaxiCommands;
+	while (!distrib.empty()) {
+		auto el = *distrib.begin();
+		distrib.erase(distrib.begin());
+		auto teorAddition = -el.addition;
+		auto p = el.p;
+		if (!sol->isWaitingPassenger(p)) continue;
+		auto takePas = Command(p.from(), p.id());
+		auto dropPas = Command(p.to(), -p.id());
+		auto taxi = el.taxi;
+		auto commands = mTaxiCommands.count(taxi.id()) ? mTaxiCommands[taxi.id()] : taxi.commands();
+		double wasScore = commands.estimateScore(taxi);
+		commands.addCommand(takePas);
+		commands.addCommand(dropPas);
+		if (!commands.isCorrect()) continue;
+		sol->optimizeCommandsOrder(commands, taxi);
+		double becomeScore = commands.estimateScore(taxi);
+		double realAddition = becomeScore - wasScore;
+		if (abs(teorAddition - realAddition) < EPS) {
 			if (!mTaxiCommands.count(taxi.id())) {
 				mTaxiCommands[taxi.id()] = taxi.commands();
 			}
 			mTaxiCommands[taxi.id()].addCommand(takePas);
 			mTaxiCommands[taxi.id()].addCommand(dropPas);
 			sol->optimizeCommandsOrder(mTaxiCommands[taxi.id()], taxi);
+			sol->distributePassenger(p);
+		} else {
+			assert(realAddition < teorAddition);
+			distrib.insert({-realAddition, p, taxi});
 		}
 	}
+
 	return mTaxiCommands;
 }
 
@@ -758,4 +776,12 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		}
 		commands = betterSequence;
 	}
+}
+
+vector<Passenger> SolutionEnvironment::getVectorWaitingPassengers() const {
+	vector<Passenger> res;
+	for (auto el : _waitingPassengers) {
+		res.push_back(el.second);
+	}
+	return res;
 }
