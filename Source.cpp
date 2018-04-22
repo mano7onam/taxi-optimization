@@ -301,7 +301,9 @@ struct Distribution {
 	Taxi taxi;
 
 	bool operator < (const Distribution &d) const {
-		return addition < d.addition;
+		return abs(addition - d.addition) < EPS && p.id() < d.p.id() ||
+				abs(addition - d.addition) < EPS && p.id() == d.p.id() && taxi.id() < d.taxi.id() ||
+				addition < d.addition;
 	}
 };
 
