@@ -35,6 +35,7 @@ const double EPS = 1e-12;
 // 1 - log only total score in the end
 // 2 - log all passengers' score in the end
 #define _SCORE_LOG 1
+#define _TAXI_LOG 1
 
 // declarations
 class Interactor;
@@ -124,6 +125,11 @@ protected:
 	int y;
 };
 
+bool operator <(const Point& a, const Point& b) {
+	if (a.getX() != b.getX()) return a.getX() < b.getX();
+	return a.getY() < b.getY();
+}
+
 static int getDistance(const Point &a, const Point &b);
 
 // one command for taxi, gonna to be extended later
@@ -164,6 +170,8 @@ public:
 	int ordersCount() const; // number of different passengers we want to take
 	bool isCorrect() const; // check order and that taxi capacity is enough to perform this sequence
 	bool isEmpty() { return v.empty(); }
+	
+	void clearZeroCommands();
 
 	void nextPermutation() { next_permutation(v.begin(), v.end()); }
 
@@ -234,6 +242,8 @@ public:
 
 	int freeSeats() { return 4 - (int)_passengers.size(); }
 
+	bool isAtBorder() const { return pos().getX() == env->width() - 1 || pos().getY() == env->height() - 1; }
+
 protected:
 	int _id;
 	Point _pos;
@@ -241,6 +251,9 @@ protected:
 	PassengersSet _passengers;
 };
 
+bool operator <(const Taxi& a, const Taxi& b) {
+	return a.id() < b.id();
+}
 
 class Interactor {
 public:
@@ -289,6 +302,8 @@ public:
 
 	// reorder commands to get maximum score from it
 	void optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const;
+
+	void distributeFreeTaxis(map<int, CommandsSequence>& c);
 private:
 	map<int, Passenger> _waitingPassengers; // list of undistributed to taxis passengers
 
@@ -309,6 +324,7 @@ struct Distribution {
 
 // main solution function
 map<int, CommandsSequence> calcCommands(UpdateState state) {
+
 	if (state == ST_FINISH) {
 		//env->taxisLog();
 	}
@@ -360,6 +376,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 			}
 			mTaxiCommands[taxi.id()].addCommand(takePas);
 			mTaxiCommands[taxi.id()].addCommand(dropPas);
+			mTaxiCommands[taxi.id()].clearZeroCommands();
 			sol->optimizeCommandsOrder(mTaxiCommands[taxi.id()], taxi);
 			sol->distributePassenger(p);
 		} else {
@@ -367,6 +384,8 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 			distrib.insert({-realAddition, p, taxi});
 		}
 	}
+
+	sol->distributeFreeTaxis(mTaxiCommands);
 
 	return mTaxiCommands;
 }
@@ -464,6 +483,7 @@ void Environment::taxisLog() {
 	for (auto& taxi : _taxis) {
 		Point p = taxi.pos();
 		char c = '0' + taxi.commands().size();
+		if (_TAXI_LOG == 1) c = '#';
 		t[p.getY()][p.getX()] = c;
 	}
 	for (auto& el : _freePassengers) {
@@ -473,8 +493,10 @@ void Environment::taxisLog() {
 		char cdrop = 'a' + add;
 		Point from = p.from();
 		Point to = p.to();
-		t[from.getY()][from.getX()] = ctake;
-		t[to.getY()][to.getX()] = cdrop;
+		if (_TAXI_LOG >= 2) {
+			t[from.getY()][from.getX()] = ctake;
+			t[to.getY()][to.getX()] = cdrop;
+		}
 	}
 	for (int i = 0; i < height(); i++) {
 		LOG << t[i] << "\n";
@@ -742,6 +764,21 @@ bool CommandsSequence::isCorrect() const {
 	return true;
 }
 
+void CommandsSequence::clearZeroCommands() {
+	bool found = true;
+	while (found) {
+		found = false;
+		for (auto it = v.begin(); it != v.end(); ++it) {
+			Command command = *it;
+			if (command.getA() == 0) {
+				v.erase(it);
+				found = true;
+				break;
+			}
+		}
+	}
+}
+
 double CommandsSequence::estimateScore(const Taxi & taxi) {
 	int nowTime = env->time();
 	Point p = taxi.pos();
@@ -807,6 +844,41 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		}
 		commands = betterSequence;
 	}
+}
+
+void SolutionEnvironment::distributeFreeTaxis(map<int, CommandsSequence>& c) {
+	set<Taxi> freeTaxis;
+	for (auto& taxi : env->getTaxis()) {
+		CommandsSequence commands = taxi.commands();
+		commands.clearZeroCommands();
+		if (commands.size()) continue;
+		if (!taxi.isAtBorder()) continue;
+		freeTaxis.insert(taxi);
+	}
+	int n = freeTaxis.size();
+	set<Point> points;
+	while (points.size() < n) {
+		points.insert(Point(rand() % env->width(), rand() % env->height()));
+	}
+	while (!freeTaxis.empty()) {
+		Point p;
+		Taxi t;
+		ll bestDist = DOUBLE_INF;
+		for (auto taxi : freeTaxis) {
+			for (auto point : points) {
+				ll d = getDistance(taxi.pos(), point);
+				if (d < bestDist) {
+					bestDist = d;
+					t = taxi;
+					p = point;
+				}
+			}
+		}
+		c[t.id()].addCommand(Command(p, 0));
+		points.erase(p);
+		freeTaxis.erase(t);
+	}
+	assert(points.empty());
 }
 
 vector<Passenger> SolutionEnvironment::getVectorWaitingPassengers() const {
