@@ -35,7 +35,7 @@ const double EPS = 1e-12;
 // 0 - no score logging
 // 1 - log only total score in the end
 // 2 - log all passengers' score in the end
-#define _SCORE_LOG 2
+#define _SCORE_LOG 1
 
 // declarations
 class Interactor;
@@ -88,6 +88,7 @@ public:
 
 	void commit(map<int, CommandsSequence>& c);
 
+	void taxisLog();
 	void finishLog();
 
 protected:
@@ -232,7 +233,7 @@ public:
 	void addPassenger(const Passenger &p);
 	void delPassenger(const Passenger &p);
 
-	int freeSeats() const { return 4 - (int)_passengers.size(); }
+	int freeSeats() { return 4 - (int)_passengers.size(); }
 
 protected:
 	int _id;
@@ -483,6 +484,31 @@ void Environment::commit(map<int, CommandsSequence>& c) {
 	for (auto& el : _taxis) {
 		if (!c.count(el.id())) continue;
 		el.updateCommands(c[el.id()]);
+	}
+}
+
+void Environment::taxisLog() {
+	vector<string> t(height());
+	string s = "";
+	for (int i = 0; i < width(); i++) s += ".";
+	for (int i = 0; i < height(); i++) t[i] = s;
+	for (auto& taxi : _taxis) {
+		Point p = taxi.pos();
+		char c = '0' + taxi.commands().size();
+		t[p.getY()][p.getX()] = c;
+	}
+	for (auto& el : _freePassengers) {
+		Passenger p = el.second;
+		int add = rand() % 26;
+		char ctake = 'A' + add;
+		char cdrop = 'a' + add;
+		Point from = p.from();
+		Point to = p.to();
+		t[from.getY()][from.getX()] = ctake;
+		t[to.getY()][to.getX()] = cdrop;
+	}
+	for (int i = 0; i < height(); i++) {
+		LOG << t[i] << "\n";
 	}
 }
 
@@ -778,8 +804,6 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 // SolutionEnvironment ==================================================================================
 
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
-//	cerr << "optimizeCommandsOrder: " << endl;
-//	cerr << commands.size() << endl;
 	if (commands.size() < FULL_REORDER_LIMIT) {
 		int fact = 1;
 		for (int i = 2; i < commands.size(); i++) {
@@ -820,14 +844,6 @@ vector<Passenger> SolutionEnvironment::getVectorWaitingPassengers() const {
 	vector<Passenger> res;
 	for (auto el : _waitingPassengers) {
 		res.push_back(el.second);
-	}
-	return res;
-}
-
-set<Passenger> SolutionEnvironment::getSetWaitingPassengers() const {
-	set<Passenger> res;
-	for (auto el : _waitingPassengers) {
-		res.insert(el.second);
 	}
 	return res;
 }
