@@ -232,7 +232,7 @@ public:
 	void addPassenger(const Passenger &p);
 	void delPassenger(const Passenger &p);
 
-	int freeSeats() { return 4 - (int)_passengers.size(); }
+	int freeSeats() const { return 4 - (int)_passengers.size(); }
 
 protected:
 	int _id;
@@ -281,7 +281,9 @@ enum UpdateState {
 class SolutionEnvironment {
 public:
 	const map<int, Passenger>& getWaitingPassengers() const { return _waitingPassengers; }
+	void setWaitingPassangers(map<int, Passenger> waitingPassengers) { _waitingPassengers = waitingPassengers; }
 	vector<Passenger> getVectorWaitingPassengers() const;
+	set<Passenger> getSetWaitingPassengers() const;
 
 	bool isWaitingPassenger(const Passenger &p) const {return (bool)_waitingPassengers.count(p.id()); }
 	void distributePassenger(const Passenger &p) { _waitingPassengers.erase(p.id()); }
@@ -295,30 +297,25 @@ private:
 	const int FULL_REORDER_LIMIT = 8;
 };
 
-struct Distribution {
-	double addition;
-	Passenger p;
-	Taxi taxi;
-
-	bool operator < (const Distribution &d) const {
-		return abs(addition - d.addition) < EPS && p.id() < d.p.id() ||
-				abs(addition - d.addition) < EPS && p.id() == d.p.id() && taxi.id() < d.taxi.id() ||
-				addition < d.addition;
+void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
+	sol->setWaitingPassangers(env->getFreePassengers());
+	for (auto& taxi : taxis) {
+		CommandsSequence commands;
+		auto psIntoTaxi = taxi.passengers();
+		for (const auto& p : psIntoTaxi) {
+			commands.addCommand(Command(p.to(), -p.id()));
+			sol->distributePassenger(p);
+		}
+		taxi.updateCommands(commands);
+		mTaxiCommands[taxi.id()] = commands;
 	}
-};
+}
 
-// main solution function
-map<int, CommandsSequence> calcCommands(UpdateState state) {
-	if (state == ST_NORMAL) {
-		sol->addPassenger(env->getLastPassenger());
-	}
-
-	auto taxis = env->getTaxis(); // all taxis
-	auto psngrs = sol->getVectorWaitingPassengers(); // undistributed to taxis passengers
-
-	set<Distribution> distrib;
-	for (const auto& taxi : taxis) {
-		for (const auto& p : psngrs) {
+vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const vector<Taxi> &taxis) {
+	vector<pair<double, Passenger>> newPassengers;
+	for (const auto& p : psngrs) {
+		double bestAddition = -DOUBLE_INF;
+		for (const auto& taxi : taxis) {
 			auto takePas = Command(p.from(), p.id());
 			auto dropPas = Command(p.to(), -p.id());
 			auto commands = taxi.commands();
@@ -328,47 +325,84 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 			sol->optimizeCommandsOrder(commands, taxi);
 			double becomeScore = commands.estimateScore(taxi);
 			double addition = becomeScore - wasScore;
-			distrib.insert({-addition, p, taxi});
+			if (addition > bestAddition) {
+				bestAddition = addition;
+			}
 		}
+		newPassengers.emplace_back(bestAddition, p);
+	}
+	sort(newPassengers.rbegin(), newPassengers.rend());
+
+	vector<Passenger> res;
+	for (auto el : newPassengers) {
+		res.push_back(el.second);
 	}
 
-	map<int, CommandsSequence> mTaxiCommands;
-	while (!distrib.empty()) {
-		auto el = *distrib.begin();
-		distrib.erase(distrib.begin());
-		auto teorAddition = -el.addition;
-		auto p = el.p;
-		if (!sol->isWaitingPassenger(p)) continue;
-		auto takePas = Command(p.from(), p.id());
-		auto dropPas = Command(p.to(), -p.id());
-		auto taxi = el.taxi;
-		auto commands = mTaxiCommands.count(taxi.id()) ? mTaxiCommands[taxi.id()] : taxi.commands();
-		double wasScore = commands.estimateScore(taxi);
-		commands.addCommand(takePas);
-		commands.addCommand(dropPas);
-		if (!commands.isCorrect()) continue;
-		sol->optimizeCommandsOrder(commands, taxi);
-		double becomeScore = commands.estimateScore(taxi);
-		double realAddition = becomeScore - wasScore;
-		if (abs(teorAddition - realAddition) < EPS) {
+	return res;
+}
+
+void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxis,
+                       map<int, CommandsSequence> &mTaxiCommands)
+{
+	for (const auto& p : psngrs) {
+		int bestTaxiId = -1;
+		double bestAddition = -DOUBLE_INF;
+
+		Command takePas = Command(p.from(), p.id());
+		Command dropPas = Command(p.to(), -p.id());
+
+		for (auto& taxi : taxis) {
+			CommandsSequence commands = mTaxiCommands.count(taxi.id()) ? mTaxiCommands[taxi.id()] : taxi.commands();
+			double wasScore = commands.estimateScore(taxi);
+			commands.addCommand(takePas);
+			commands.addCommand(dropPas);
+			sol->optimizeCommandsOrder(commands, taxi);
+			double becomeScore = commands.estimateScore(taxi);
+			double addition = becomeScore - wasScore;
+			if (addition > bestAddition) {
+				bestAddition = addition;
+				bestTaxiId = taxi.id();
+			}
+		}
+		assert(bestAddition + EPS >= 0);
+
+		sol->distributePassenger(p);
+
+		// updating taxi info
+		for (auto& taxi : taxis) {
+			if (taxi.id() != bestTaxiId) continue;
 			if (!mTaxiCommands.count(taxi.id())) {
 				mTaxiCommands[taxi.id()] = taxi.commands();
 			}
 			mTaxiCommands[taxi.id()].addCommand(takePas);
 			mTaxiCommands[taxi.id()].addCommand(dropPas);
 			sol->optimizeCommandsOrder(mTaxiCommands[taxi.id()], taxi);
-			sol->distributePassenger(p);
-		} else {
-			assert(realAddition < teorAddition);
-			distrib.insert({-realAddition, p, taxi});
 		}
 	}
+}
 
+// main solution function
+map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommands) {
+	if (state == ST_NORMAL) {
+		sol->addPassenger(env->getLastPassenger());
+	}
+
+	vector<Taxi> taxis = env->getTaxis(); // all taxis
+	map<int, CommandsSequence> mTaxiCommands;
+
+	if (flagClearCommands) {
+		clearTaxiCommands(taxis, mTaxiCommands);
+	}
+
+	auto psngrs = sortPassengerByBestTaxi(sol->getVectorWaitingPassengers(), taxis);
+
+	updateMapCommands(psngrs, taxis, mTaxiCommands);
 	return mTaxiCommands;
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state);
+	auto m = calcCommands(state, state == ST_FINISH);
+	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
 }
@@ -744,6 +778,8 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 // SolutionEnvironment ==================================================================================
 
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
+//	cerr << "optimizeCommandsOrder: " << endl;
+//	cerr << commands.size() << endl;
 	if (commands.size() < FULL_REORDER_LIMIT) {
 		int fact = 1;
 		for (int i = 2; i < commands.size(); i++) {
@@ -784,6 +820,14 @@ vector<Passenger> SolutionEnvironment::getVectorWaitingPassengers() const {
 	vector<Passenger> res;
 	for (auto el : _waitingPassengers) {
 		res.push_back(el.second);
+	}
+	return res;
+}
+
+set<Passenger> SolutionEnvironment::getSetWaitingPassengers() const {
+	set<Passenger> res;
+	for (auto el : _waitingPassengers) {
+		res.insert(el.second);
 	}
 	return res;
 }
