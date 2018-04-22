@@ -19,7 +19,6 @@
 #include <list>
 #include <numeric>
 #include <tuple>
-// #include "Source.h"
 
 using namespace std;
 typedef long long ll;
@@ -35,7 +34,7 @@ const double EPS = 1e-12;
 // 0 - no score logging
 // 1 - log only total score in the end
 // 2 - log all passengers' score in the end
-#define _SCORE_LOG 2
+#define _SCORE_LOG 1
 
 // declarations
 class Interactor;
@@ -88,6 +87,7 @@ public:
 
 	void commit(map<int, CommandsSequence>& c);
 
+	void taxisLog();
 	void finishLog();
 
 protected:
@@ -307,6 +307,10 @@ struct Distribution {
 
 // main solution function
 map<int, CommandsSequence> calcCommands(UpdateState state) {
+	if (state == ST_FINISH) {
+		//env->taxisLog();
+	}
+
 	if (state == ST_NORMAL) {
 		sol->addPassenger(env->getLastPassenger());
 	}
@@ -344,7 +348,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state) {
 		double wasScore = commands.estimateScore(taxi);
 		commands.addCommand(takePas);
 		commands.addCommand(dropPas);
-		if (!commands.isCorrect()) continue;
+		assert(commands.isCorrect());
 		sol->optimizeCommandsOrder(commands, taxi);
 		double becomeScore = commands.estimateScore(taxi);
 		double realAddition = becomeScore - wasScore;
@@ -447,6 +451,31 @@ void Environment::commit(map<int, CommandsSequence>& c) {
 	for (auto& el : _taxis) {
 		if (!c.count(el.id())) continue;
 		el.updateCommands(c[el.id()]);
+	}
+}
+
+void Environment::taxisLog() {
+	vector<string> t(height());
+	string s = "";
+	for (int i = 0; i < width(); i++) s += ".";
+	for (int i = 0; i < height(); i++) t[i] = s;
+	for (auto& taxi : _taxis) {
+		Point p = taxi.pos();
+		char c = '0' + taxi.commands().size();
+		t[p.getY()][p.getX()] = c;
+	}
+	for (auto& el : _freePassengers) {
+		Passenger p = el.second;
+		int add = rand() % 26;
+		char ctake = 'A' + add;
+		char cdrop = 'a' + add;
+		Point from = p.from();
+		Point to = p.to();
+		t[from.getY()][from.getX()] = ctake;
+		t[to.getY()][to.getX()] = cdrop;
+	}
+	for (int i = 0; i < height(); i++) {
+		LOG << t[i] << "\n";
 	}
 }
 
