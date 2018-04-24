@@ -32,7 +32,7 @@ const double EPS = 1e-12;
 
 // defines
 #define LOG cout
-#define LOG_ALL_STATES
+//#define LOG_ALL_STATES
 
 // 0 - no score logging
 // 1 - log only total score in the end
@@ -94,7 +94,8 @@ public:
 	void taxisLog();
 	void finishLog();
 
-//	bool isRecentPassenger(Passenger p) { return _maxPsngId - p.id() < 4; }
+	bool isRecentPassenger(const Passenger &p) const;
+	bool isRecentPassenger(int id) const;
 
 	bool taxisHaveAnyCommands() const;
 
@@ -191,6 +192,9 @@ public:
 	deque<Command>::iterator begin() { return v.begin(); }
 	deque<Command>::iterator end() { return v.end(); }
 
+	deque<Command>::const_iterator begin() const { return v.begin(); }
+	deque<Command>::const_iterator end() const { return v.end(); }
+
 protected:
 	deque<Command> v; // reversed order
 };
@@ -246,10 +250,11 @@ public:
 	int ordersCount() const { return _commands.ordersCount(); } // number of passengers distributed to this taxi
 
 	void update(int prevTime, int curTime);
-	void updateCommands(CommandsSequence commands) { _commands = commands; }
+	void updateCommands(const CommandsSequence &commands) { _commands = commands; }
 
 	void addPassenger(const Passenger &p);
 	void delPassenger(const Passenger &p);
+	bool havePassenger(int id) const { return (bool)_passengersIds.count(id); }
 
 	int freeSeats() { return 4 - (int)_passengers.size(); }
 
@@ -262,6 +267,7 @@ protected:
 	Point _pos;
 	CommandsSequence _commands;
 	PassengersSet _passengers;
+	set<int> _passengersIds;
 };
 
 bool operator <(const Taxi& a, const Taxi& b) {
@@ -313,6 +319,7 @@ public:
 
 	bool isWaitingPassenger(const Passenger &p) const {return (bool)_waitingPassengers.count(p.id()); }
 	void distributePassenger(const Passenger &p) { _waitingPassengers.erase(p.id()); }
+	void distributePassenger(int id) { _waitingPassengers.erase(id); }
 	void addPassenger(const Passenger &p) { _waitingPassengers[p.id()] = p; }
 
 	// reorder commands to get maximum score from it
@@ -340,7 +347,21 @@ void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCom
 }
 
 void clearTaxiCommandsRecentPassenger(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
-
+	sol->setWaitingPassangers(env->getFreePassengers());
+	for (auto& taxi : taxis) {
+		CommandsSequence newCommands;
+		auto& lastCommands = taxi.commands();
+		auto psIntoTaxi = taxi.passengers();
+		for (const auto& command : lastCommands) {
+			int id = abs(command.getA());
+			if (taxi.havePassenger(id) || !env->isRecentPassenger(id)) {
+				sol->distributePassenger(id);
+				newCommands.addCommand(command);
+			}
+		}
+		taxi.updateCommands(newCommands);
+		mTaxiCommands[taxi.id()] = newCommands;
+	}
 }
 
 vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const vector<Taxi> &taxis) {
@@ -373,6 +394,22 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 	return res;
 }
 
+void updateTaxiInfo(map<int, CommandsSequence> &mTaxiCommands, const vector<Taxi> &taxis,
+                    int taxiId, Command takePas, Command dropPas)
+{
+	// updating taxi info
+	for (auto& taxi : taxis) {
+		if (taxi.id() != taxiId) continue;
+		if (!mTaxiCommands.count(taxi.id())) {
+			mTaxiCommands[taxi.id()] = taxi.commands();
+		}
+		mTaxiCommands[taxi.id()].addCommand(takePas);
+		mTaxiCommands[taxi.id()].addCommand(dropPas);
+		mTaxiCommands[taxi.id()].clearZeroCommands();
+		sol->optimizeCommandsOrder(mTaxiCommands[taxi.id()], taxi);
+	}
+}
+
 void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxis,
                        map<int, CommandsSequence> &mTaxiCommands)
 {
@@ -399,18 +436,62 @@ void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxi
 		assert(bestAddition + EPS >= 0);
 
 		sol->distributePassenger(p);
+		updateTaxiInfo(mTaxiCommands, taxis, bestTaxiId, takePas, dropPas);
+	}
+}
 
-		// updating taxi info
-		for (auto& taxi : taxis) {
-			if (taxi.id() != bestTaxiId) continue;
-			if (!mTaxiCommands.count(taxi.id())) {
-				mTaxiCommands[taxi.id()] = taxi.commands();
+void updateMapCommandsBrutforcePassengersPermutation(const vector<Passenger> &sourcePsngrs,
+                                                     const vector<Taxi> &taxis,
+                                                     map<int, CommandsSequence> &mTaxiCommands)
+{
+	vector<Passenger> psngrs = sourcePsngrs;
+	vector<Passenger> bestPsngrsSeq;
+	vector<int> bestTaxiIds;
+	double bestTotalScore = -DOUBLE_INF;
+
+	sort(psngrs.begin(), psngrs.end());
+	while (next_permutation(psngrs.begin(), psngrs.end())) {
+		vector<int> bti;
+		double currentScore = 0;
+		for (const auto& p : psngrs) {
+			int bestTaxiId = -1;
+			double bestAddition = -DOUBLE_INF;
+
+			Command takePas = Command(p.from(), p.id());
+			Command dropPas = Command(p.to(), -p.id());
+
+			for (auto& taxi : taxis) {
+				CommandsSequence commands = mTaxiCommands.count(taxi.id()) ? mTaxiCommands[taxi.id()] : taxi.commands();
+				double wasScore = commands.estimateScore(taxi);
+				commands.addCommand(takePas);
+				commands.addCommand(dropPas);
+				sol->optimizeCommandsOrder(commands, taxi);
+				double becomeScore = commands.estimateScore(taxi);
+				double addition = becomeScore - wasScore;
+				if (addition > bestAddition) {
+					bestAddition = addition;
+					bestTaxiId = taxi.id();
+				}
 			}
-			mTaxiCommands[taxi.id()].addCommand(takePas);
-			mTaxiCommands[taxi.id()].addCommand(dropPas);
-			mTaxiCommands[taxi.id()].clearZeroCommands();
-			sol->optimizeCommandsOrder(mTaxiCommands[taxi.id()], taxi);
+			assert(bestAddition + EPS >= 0);
+			bti.push_back(bestTaxiId);
+			currentScore += bestAddition;
 		}
+
+		if (currentScore > bestTotalScore) {
+			bestTotalScore = currentScore;
+			bestPsngrsSeq = psngrs;
+			bestTaxiIds = bti;
+		}
+	}
+
+	for (int i = 0; i < bestPsngrsSeq.size(); ++i) {
+		Passenger p = bestPsngrsSeq[i];
+		Command takePas = Command(p.from(), p.id());
+		Command dropPas = Command(p.to(), -p.id());
+		int taxiId = bestTaxiIds[i];
+		sol->distributePassenger(p);
+		updateTaxiInfo(mTaxiCommands, taxis, taxiId, takePas, dropPas);
 	}
 }
 
@@ -426,10 +507,16 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 	if (flagClearCommands) {
 		clearTaxiCommands(taxis, mTaxiCommands);
 	}
+	clearTaxiCommandsRecentPassenger(taxis, mTaxiCommands);
 
 	auto psngrs = sortPassengerByBestTaxi(sol->getVectorWaitingPassengers(), taxis);
 
-	updateMapCommands(psngrs, taxis, mTaxiCommands);
+	if (/*psngrs.size() < 5*/false) {
+		updateMapCommandsBrutforcePassengersPermutation(psngrs, taxis, mTaxiCommands);
+	} else {
+		updateMapCommands(psngrs, taxis, mTaxiCommands);
+	}
+
 	return mTaxiCommands;
 }
 
@@ -489,6 +576,7 @@ const Passenger Environment::getLastPassenger() const {
 void Environment::update(const Passenger &passenger) {
 	int prevTime = _time;
 	_time = passenger.time();
+	cerr << _time << endl;
 
 #ifdef LOG_ALL_STATES
 	for (int curTime = prevTime + 1; curTime < _time; ++curTime) {
@@ -665,6 +753,14 @@ void Environment::logStateToDraw(const string &filename, int logTime) const {
 	}
 }
 
+bool Environment::isRecentPassenger(const Passenger &p) const {
+	return _maxPsngId - p.id() < 4;
+}
+
+bool Environment::isRecentPassenger(int id) const {
+	return _maxPsngId - id < 4;
+}
+
 // Point ==================================================================================
 void Point::ask() {
 	x = interactor->askInt() - 1;
@@ -764,11 +860,13 @@ Taxi::Taxi() {
 void Taxi::addPassenger(const Passenger &p) {
 	assert(static_cast<int>(_passengers.size()) < 4);
 	_passengers.insert(p);
+	_passengersIds.insert(p.id());
 }
 
 void Taxi::delPassenger(const Passenger &p) {
 	assert(_passengers.count(p));
 	_passengers.erase(p);
+	_passengersIds.erase(p.id());
 }
 
 void Taxi::update(int prevTime, int curTime) {
