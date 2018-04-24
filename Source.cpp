@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #pragma comment(linker, "/STACK:10034217728")
 #include <iostream>
+#include <fstream>
 #include <cstdio>
 #include <vector>
 #include <set>
@@ -31,6 +32,7 @@ const double EPS = 1e-12;
 
 // defines
 #define LOG cout
+#define LOG_ALL_STATES
 
 // 0 - no score logging
 // 1 - log only total score in the end
@@ -91,6 +93,12 @@ public:
 
 	void taxisLog();
 	void finishLog();
+
+//	bool isRecentPassenger(Passenger p) { return _maxPsngId - p.id() < 4; }
+
+	bool taxisHaveAnyCommands() const;
+
+	void logStateToDraw(const string &filename, int logTime) const;
 
 protected:
 	int _time;
@@ -213,6 +221,8 @@ public:
 
 	string toString() const;
 
+	string toStringToDraw() const;
+
 protected:
 	int _id;
 	int _time;     // time when this passenger appeared
@@ -244,6 +254,8 @@ public:
 	int freeSeats() { return 4 - (int)_passengers.size(); }
 
 	bool isAtBorder() const { return pos().getX() == env->width() - 1 || pos().getY() == env->height() - 1; }
+
+	string toStringToDraw() const;
 
 protected:
 	int _id;
@@ -325,6 +337,10 @@ void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCom
 		taxi.updateCommands(commands);
 		mTaxiCommands[taxi.id()] = commands;
 	}
+}
+
+void clearTaxiCommandsRecentPassenger(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
+
 }
 
 vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const vector<Taxi> &taxis) {
@@ -471,21 +487,65 @@ const Passenger Environment::getLastPassenger() const {
 }
 
 void Environment::update(const Passenger &passenger) {
-	_freePassengers[passenger.id()] = passenger;
-	_allPassengers[passenger.id()] = passenger;
 	int prevTime = _time;
 	_time = passenger.time();
+
+#ifdef LOG_ALL_STATES
+	for (int curTime = prevTime + 1; curTime < _time; ++curTime) {
+		for (auto& el : _taxis) {
+			el.update(curTime - 1, curTime);
+		}
+		logStateToDraw("log", curTime);
+	}
+#endif
+
+	_freePassengers[passenger.id()] = passenger;
+	_allPassengers[passenger.id()] = passenger;
+
+#ifdef LOG_ALL_STATES
+	for (auto& el : _taxis) {
+		el.update(_time - 1, _time);
+	}
+#else
 	for (auto& el : _taxis) {
 		el.update(prevTime, time());
 	}
+#endif
+
+
+#ifdef LOG_ALL_STATES
+	logStateToDraw("log", _time);
+#endif
+}
+
+bool Environment::taxisHaveAnyCommands() const {
+	for (const auto& taxi : _taxis) {
+		if (taxi.commands().size()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void Environment::finishUpdate() {
+#ifdef LOG_ALL_STATES
+	int prevTime = _time;
+	_time = INF;
+	int curTime = prevTime + 1;
+	while (taxisHaveAnyCommands()) {
+		for (auto& el : _taxis) {
+			el.update(curTime - 1, curTime);
+		}
+		logStateToDraw("log", curTime);
+		curTime++;
+	}
+#else
 	int prevTime = _time;
 	_time = INF;
 	for (auto& el : _taxis) {
 		el.update(prevTime, time());
 	}
+#endif
 }
 
 int Environment::takeNextPassengerId() {
@@ -579,6 +639,32 @@ void Environment::delWayPassengerById(int id) {
 	_wayPassengers.erase(id);
 }
 
+void Environment::logStateToDraw(const string &filename, int logTime) const {
+	string myfilename = "log/log";
+	ofstream out(myfilename + std::to_string(logTime));
+
+	cerr << logTime << endl;
+
+	out << logTime << endl;
+
+	out << _width << ' ' << _height << endl;
+
+	out << _freePassengers.size() << endl;
+	for (const auto& p : _freePassengers) {
+		out << p.second.toStringToDraw() << endl;
+	}
+
+	out << _wayPassengers.size() << endl;
+	for (const auto &p : _wayPassengers) {
+		out << p.second.toStringToDraw() << endl;
+	}
+
+	out << _taxis.size() << endl;
+	for (const auto& taxi : _taxis) {
+		out << taxi.toStringToDraw() << endl;
+	}
+}
+
 // Point ==================================================================================
 void Point::ask() {
 	x = interactor->askInt() - 1;
@@ -655,6 +741,17 @@ string Passenger::toString() const {
 	return str;
 }
 
+string Passenger::toStringToDraw() const {
+	stringstream ss;
+	ss << _id << ' ' << _time << ' ' <<
+	        _pFrom.getX() << ' ' << _pFrom.getY() << ' ' <<
+			_pTo.getX() << ' ' << _pTo.getY() << endl;
+
+	string str;
+	getline(ss, str);
+	return str;
+}
+
 // Taxi ==================================================================================
 void Taxi::ask() {
 	_pos.ask();
@@ -707,6 +804,24 @@ void Taxi::update(int prevTime, int curTime) {
 			break;
 		}
 	}
+}
+
+string Taxi::toStringToDraw() const {
+	stringstream ss;
+	ss << _id << ' ' << _pos.getX() << ' ' << _pos.getY() << ' ' << _passengers.size() << ' ';
+
+	int kostyl = 0;
+	for (const auto& p : _passengers) {
+		if (kostyl != 0) {
+			ss << ' ';
+		}
+		ss << p.id();
+		kostyl++;
+	}
+
+	string res;
+	getline(ss, res);
+	return res;
 }
 
 // Command ==================================================================================
