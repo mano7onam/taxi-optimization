@@ -72,7 +72,7 @@ public:
 	int width() const { return _width; }
 	int height() const { return _height; }
 
-	const map<int, Passenger>& getFreePassengers() const { return _freePassengers; }
+	const IdToPassMap& getFreePassengers() const { return _freePassengers; }
 	const vector<Taxi>& getTaxis() const { return _taxis; }
 	const Passenger getLastPassenger() const;
 	//const IdToPassMap getAllPassengers() const { return _allPassengers; } // no need in this?
@@ -170,16 +170,28 @@ protected:
 };
 
 // sequence of commands for taxi
+using CommandsList = list<Command>;
+const int MAX_ID = 1000;
+int hasCorrect[MAX_ID];
 class CommandsSequence {
 public:
 	int size() const { return v.size(); }
-	const deque<Command>& getCommands() const { return v; }
+	const CommandsList& getCommands() const { return v; }
 	Command getFirst() const { return v.front(); }
 
 	void popFirst() { v.pop_front(); }
 	void addCommand(const Command &comm) { v.push_back(comm); }
+	Command back() { return *--v.end(); }
+
+	Command takeLast() {
+		Command res = v.back();
+		v.pop_back();
+		return res;
+	}
 
 	int ordersCount() const; // number of different passengers we want to take
+	bool isCorrectS() const;
+	bool isCorrectL() const;
 	bool isCorrect() const; // check order and that taxi capacity is enough to perform this sequence
 	bool isEmpty() { return v.empty(); }
 	
@@ -191,14 +203,16 @@ public:
 	// if we assign it to certain taxi
 	double estimateScore(const Taxi& taxi);
 
-	deque<Command>::iterator begin() { return v.begin(); }
-	deque<Command>::iterator end() { return v.end(); }
+	void insert(CommandsSequence cs, int ind);
+	void delPrev(int ind);
 
-	deque<Command>::const_iterator begin() const { return v.begin(); }
-	deque<Command>::const_iterator end() const { return v.end(); }
+	CommandsList::iterator begin() { return v.begin(); }
+	CommandsList::iterator end() { return v.end(); }
 
+	CommandsList::const_iterator begin() const { return v.begin(); }
+	CommandsList::const_iterator end() const { return v.end(); }
 protected:
-	deque<Command> v; // reversed order
+	CommandsList v; // reversed order
 };
 
 class Passenger {
@@ -314,8 +328,8 @@ enum UpdateState {
 
 class SolutionEnvironment {
 public:
-	const map<int, Passenger>& getWaitingPassengers() const { return _waitingPassengers; }
-	void setWaitingPassangers(map<int, Passenger> waitingPassengers) { _waitingPassengers = waitingPassengers; }
+	const IdToPassMap& getWaitingPassengers() const { return _waitingPassengers; }
+	void setWaitingPassangers(IdToPassMap waitingPassengers) { _waitingPassengers = waitingPassengers; }
 	vector<Passenger> getVectorWaitingPassengers() const;
 	set<Passenger> getSetWaitingPassengers() const;
 
@@ -329,7 +343,7 @@ public:
 
 	void distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c);
 private:
-	map<int, Passenger> _waitingPassengers; // list of undistributed to taxis passengers
+	IdToPassMap _waitingPassengers; // list of undistributed to taxis passengers
 
 	const int FULL_REORDER_LIMIT = 8;
 };
@@ -377,6 +391,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 			double wasScore = commands.estimateScore(taxi);
 			commands.addCommand(takePas);
 			commands.addCommand(dropPas);
+			commands.clearZeroCommands();
 			sol->optimizeCommandsOrder(commands, taxi);
 			double becomeScore = commands.estimateScore(taxi);
 			double addition = becomeScore - wasScore;
@@ -384,7 +399,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 				bestAddition = addition;
 			}
 		}
-		newPassengers.emplace_back(-bestAddition, p);
+		newPassengers.emplace_back(bestAddition, p);
 	}
 	sort(newPassengers.rbegin(), newPassengers.rend());
 
@@ -427,6 +442,7 @@ void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxi
 			double wasScore = commands.estimateScore(taxi);
 			commands.addCommand(takePas);
 			commands.addCommand(dropPas);
+			commands.clearZeroCommands();
 			sol->optimizeCommandsOrder(commands, taxi);
 			double becomeScore = commands.estimateScore(taxi);
 			double addition = becomeScore - wasScore;
@@ -467,6 +483,7 @@ void updateMapCommandsBrutforcePassengersPermutation(const vector<Passenger> &so
 				double wasScore = commands.estimateScore(taxi);
 				commands.addCommand(takePas);
 				commands.addCommand(dropPas);
+				commands.clearZeroCommands();
 				sol->optimizeCommandsOrder(commands, taxi);
 				double becomeScore = commands.estimateScore(taxi);
 				double addition = becomeScore - wasScore;
@@ -509,7 +526,9 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 	if (flagClearCommands) {
 		clearTaxiCommands(taxis, mTaxiCommands);
 	}
-	clearTaxiCommandsRecentPassenger(taxis, mTaxiCommands);
+	if (false) {
+		clearTaxiCommandsRecentPassenger(taxis, mTaxiCommands);
+	}
 
 	auto psngrs = sortPassengerByBestTaxi(sol->getVectorWaitingPassengers(), taxis);
 
@@ -523,7 +542,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 20 == 0*/);
+	auto m = calcCommands(state, state == ST_FINISH || rand() % 20 == 0);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -532,6 +551,7 @@ void updateAndCommit(UpdateState state) {
 void solve() {
 	env = new Environment();
 	sol = new SolutionEnvironment();
+	memset(hasCorrect, 0, sizeof(hasCorrect));
 	env->ask();
 	updateAndCommit(ST_START);
 	Passenger passenger;
@@ -549,6 +569,9 @@ void solve() {
 int main() {
 	interactor = new Interactor();
 	solve();
+#ifdef _LOCAL_TEST
+	cout << "\nTIME ELAPSED: " << 1. * clock() / CLOCKS_PER_SEC << " sec\n";
+#endif
 	return 0;
 }
 
@@ -979,7 +1002,7 @@ int CommandsSequence::ordersCount() const {
 	return res;
 }
 
-bool CommandsSequence::isCorrect() const {
+bool CommandsSequence::isCorrectS() const {
 	set<int> openedPassengers;
 
 	// there are possible commands which are partially done
@@ -1015,13 +1038,68 @@ bool CommandsSequence::isCorrect() const {
 			if (openedPassengers.size() > 4) {
 				return false;
 			}
-		} else {
+		}
+		else {
 			openedPassengers.erase(id);
 		}
 	}
 
 	assert(openedPassengers.empty());
 	return true;
+}
+
+bool CommandsSequence::isCorrectL() const {
+	int cnt = 0;
+	bool res = true;
+	for (auto it = v.rbegin(); it != v.rend(); ++it) {
+		Command command = *it;
+		int a = command.getA();
+		if (a == 0) continue;
+		if (a < 0) {
+			hasCorrect[-a] = 1;
+			cnt++;
+		}
+		else {
+			if (!hasCorrect[a]) {
+				res = false;
+			}
+			hasCorrect[a] = 0;
+			cnt--;
+		}
+	}
+
+	// checking capacity
+	for (auto& command : v) {
+		int a = command.getA();
+		if (a == 0) continue;
+		int id = abs(a);
+		if (a > 0) {
+			hasCorrect[a] = 1;
+			cnt++;
+			if (cnt > 4) {
+				res = false;
+			}
+		}
+		else {
+			if (hasCorrect[id]) cnt--;
+			hasCorrect[id] = 0;
+		}
+	}
+	for (auto& command : v) {
+		int a = command.getA();
+		if (a == 0) continue;
+		int id = abs(a);
+		hasCorrect[id] = 0;
+	}
+	assert(cnt == 0);
+	return res;
+}
+
+bool CommandsSequence::isCorrect() const {
+	//assert(isCorrectL() == isCorrectS()); {
+		//isCorrectL();
+	//}
+	return isCorrectL();
 }
 
 void CommandsSequence::clearZeroCommands() {
@@ -1067,6 +1145,18 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 	return res;
 }
 
+void CommandsSequence::insert(CommandsSequence cs, int ind) {
+	auto it = v.begin();
+	for (int i = 0; i < ind; ++i, ++it);
+	v.insert(it, cs.begin(), cs.end());
+}
+
+void CommandsSequence::delPrev(int ind) {
+	auto it = v.begin();
+	for (int i = 0; i < ind; ++i, ++it);
+	v.erase(--it);
+}
+
 // SolutionEnvironment ==================================================================================
 
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
@@ -1079,6 +1169,7 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		double bestScore = bestSequence.estimateScore(taxi);
 		for (int i = 0; i < fact; i++) {
 			commands.nextPermutation();
+			if (commands.back().getA() > 0) continue;
 			if (!commands.isCorrect()) continue;
 			double curScore = commands.estimateScore(taxi);
 			if (curScore > bestScore) {
@@ -1103,11 +1194,42 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 			betterSequence.addCommand(command);
 		}
 		commands = betterSequence;
+		Command drop = betterSequence.takeLast();
+		Command take = betterSequence.takeLast();
+		CommandsSequence adding;
+		adding.addCommand(take);
+		adding.addCommand(drop);
+		CommandsSequence resSequence;
+		double mxScore = -1e9;
+		for (int i = 0; i <= betterSequence.size(); i++) {
+			CommandsSequence curSequqnce = betterSequence;
+			curSequqnce.insert(adding, i);
+			if (curSequqnce.isCorrect()) {
+				double curScore = curSequqnce.estimateScore(taxi);
+				if (curScore > mxScore) {
+					mxScore = curScore;
+					resSequence = curSequqnce;
+				}
+			}
+		}
+		if (mxScore < -100) {
+			int i = betterSequence.size();
+			CommandsSequence curSequqnce = betterSequence;
+			curSequqnce.insert(adding, i);
+			if (curSequqnce.isCorrect()) {
+				double curScore = curSequqnce.estimateScore(taxi);
+				if (curScore > mxScore) {
+					mxScore = curScore;
+					resSequence = curSequqnce;
+				}
+			}
+		}
+		assert(mxScore > -100);
+		commands = resSequence;
 	}
 }
 
 void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c) {
-	return;
 	set<Taxi> freeTaxis;
 	for (auto& taxi : env->getTaxis()) {
 		CommandsSequence commands = taxi.commands();
