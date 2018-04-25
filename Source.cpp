@@ -101,6 +101,8 @@ public:
 
 	void logStateToDraw(const string &filename, int logTime) const;
 
+	bool checkToDoOptimizations() const;
+
 protected:
 	int _time;
 	int _width;
@@ -111,6 +113,8 @@ protected:
 	IdToPassMap _wayPassengers;
 	IdToPassMap _freePassengers;
 	IdToPassMap _allPassengers; // used to check score in the end
+	long long startWorkingTime;
+	mutable bool flagDoOptimizations;
 };
 
 // position on plane
@@ -349,6 +353,9 @@ private:
 };
 
 void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
+	if (!env->checkToDoOptimizations()) {
+		return;
+	}
 	sol->setWaitingPassangers(env->getFreePassengers());
 	for (auto& taxi : taxis) {
 		CommandsSequence commands;
@@ -363,6 +370,9 @@ void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCom
 }
 
 void clearTaxiCommandsRecentPassenger(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
+	if (!env->checkToDoOptimizations()) {
+		return;
+	}
 	sol->setWaitingPassangers(env->getFreePassengers());
 	for (auto& taxi : taxis) {
 		CommandsSequence newCommands;
@@ -523,16 +533,16 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 	vector<Taxi> taxis = env->getTaxis(); // all taxis
 	map<int, CommandsSequence> mTaxiCommands;
 
-	if (flagClearCommands) {
+	if (flagClearCommands && env->checkToDoOptimizations()) {
 		clearTaxiCommands(taxis, mTaxiCommands);
 	}
-	if (false) {
+	if (false && env->checkToDoOptimizations()) {
 		clearTaxiCommandsRecentPassenger(taxis, mTaxiCommands);
 	}
 
 	auto psngrs = sortPassengerByBestTaxi(sol->getVectorWaitingPassengers(), taxis);
 
-	if (/*psngrs.size() < 5*/false) {
+	if (/*psngrs.size() < 5*/false && env->checkToDoOptimizations()) {
 		updateMapCommandsBrutforcePassengersPermutation(psngrs, taxis, mTaxiCommands);
 	} else {
 		updateMapCommands(psngrs, taxis, mTaxiCommands);
@@ -591,6 +601,9 @@ Environment::Environment() {
 	_time = 0;
 	_maxPsngId = 0;
 	_maxTaxiId = 0;
+
+	startWorkingTime = clock();
+	flagDoOptimizations = true;
 }
 
 const Passenger Environment::getLastPassenger() const {
@@ -785,6 +798,17 @@ bool Environment::isRecentPassenger(const Passenger &p) const {
 
 bool Environment::isRecentPassenger(int id) const {
 	return _maxPsngId - id < 4;
+}
+
+bool Environment::checkToDoOptimizations() const {
+	if (!flagDoOptimizations) {
+		return false;
+	}
+	double currTime = (double)(clock() - startWorkingTime) / CLOCKS_PER_SEC;
+	if (currTime > 11) {
+		flagDoOptimizations = false;
+	}
+	return flagDoOptimizations;
 }
 
 // Point ==================================================================================
@@ -1160,6 +1184,9 @@ void CommandsSequence::delPrev(int ind) {
 // SolutionEnvironment ==================================================================================
 
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
+	if (!env->checkToDoOptimizations()) {
+		return;
+	}
 	if (commands.size() < FULL_REORDER_LIMIT) {
 		int fact = 1;
 		for (int i = 2; i < commands.size(); i++) {
