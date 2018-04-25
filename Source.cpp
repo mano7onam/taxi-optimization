@@ -163,6 +163,8 @@ public:
 		return y < c.getY();
 	}
 
+	string toStringDraw() const;
+
 protected:	
 	int a;
 };
@@ -521,7 +523,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH || rand() % 20 == 0);
+	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 20 == 0*/);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -576,7 +578,7 @@ const Passenger Environment::getLastPassenger() const {
 void Environment::update(const Passenger &passenger) {
 	int prevTime = _time;
 	_time = passenger.time();
-	cerr << _time << endl;
+	//cerr << _time << endl;
 
 #ifdef LOG_ALL_STATES
 	for (int curTime = prevTime + 1; curTime < _time; ++curTime) {
@@ -731,7 +733,7 @@ void Environment::logStateToDraw(const string &filename, int logTime) const {
 	string myfilename = "log/log";
 	ofstream out(myfilename + std::to_string(logTime));
 
-	cerr << logTime << endl;
+	//cerr << logTime << endl;
 
 	out << logTime << endl;
 
@@ -751,6 +753,7 @@ void Environment::logStateToDraw(const string &filename, int logTime) const {
 	for (const auto& taxi : _taxis) {
 		out << taxi.toStringToDraw() << endl;
 	}
+	out.close();
 }
 
 bool Environment::isRecentPassenger(const Passenger &p) const {
@@ -917,6 +920,14 @@ string Taxi::toStringToDraw() const {
 		kostyl++;
 	}
 
+	int num = 0;
+	ss << ' ';
+	ss << commands().size();
+	for (const auto& command : _commands) {
+		ss << ' ';
+		ss << command.toStringDraw();
+	}
+
 	string res;
 	getline(ss, res);
 	return res;
@@ -946,6 +957,14 @@ Point Command::performPart(const Point &from, int haveTime) {
 	}
 
 	return Point(resX, resY);
+}
+
+string Command::toStringDraw() const {
+	stringstream ss;
+	ss << x << " " << y << " " << a << "\n";
+	string res;
+	getline(ss, res);
+	return res;
 }
 
 // CommandsSequence ==================================================================================
