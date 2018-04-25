@@ -345,6 +345,8 @@ public:
 	// reorder commands to get maximum score from it
 	void optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const;
 
+	set<Point> generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const;
+	set<Point> generatePointsForTaxisByTaxis(const vector<Taxi> &taxis, int num) const;
 	void distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c);
 private:
 	IdToPassMap _waitingPassengers; // list of undistributed to taxis passengers
@@ -1256,6 +1258,55 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 	}
 }
 
+set<Point> SolutionEnvironment::generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const {
+	set<Point> points;
+	for (auto p : psngrs) {
+		points.insert(p.from());
+	}
+	while (points.size() < n) {
+		points.insert(Point(rand() % env->width(), rand() % env->height()));
+	}
+	return points;
+}
+
+set<Point> SolutionEnvironment::generatePointsForTaxisByTaxis(const vector<Taxi> &taxis, int num) const {
+	set<Point> result;
+
+	vector<Point> candidats;
+	for (int i = 0; i < 500; ++i) {
+		candidats.emplace_back(rand() % env->width(), rand() % env->height());
+	}
+
+	double taxiW = 0.002;
+	double pointW = 0.001;
+	while (result.size() < num) {
+		double bestTotalDist = 0;
+		int bestPointId = 0;
+		for (int i = 0; i < candidats.size(); ++i) {
+			auto curPoint = candidats[i];
+			double totalDist = 0;
+			int totalSz = (int)taxis.size() + (int)result.size();
+			assert(totalSz != 0);
+			for (const auto& taxi : taxis) {
+				totalDist += getDistance(taxi.pos(), curPoint) * taxiW;
+			}
+			for (const auto& p : result) {
+				totalDist += getDistance(p, curPoint) * pointW;
+			}
+			totalDist /= totalSz;
+			if (totalDist > bestTotalDist) {
+				bestTotalDist = totalDist;
+				bestPointId = i;
+			}
+		}
+		result.insert(candidats[bestPointId]);
+		candidats[bestPointId] = candidats.back();
+		candidats.pop_back();
+	}
+
+	return result;
+}
+
 void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c) {
 	set<Taxi> freeTaxis;
 	for (auto& taxi : env->getTaxis()) {
@@ -1265,14 +1316,8 @@ void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, m
 		//if (!taxi.isAtBorder()) continue;
 		freeTaxis.insert(taxi);
 	}
-	int n = freeTaxis.size();
-	set<Point> points;
-	for (auto p : psngrs) {
-		points.insert(p.from());
-	}
-	while (points.size() < n) {
-		points.insert(Point(rand() % env->width(), rand() % env->height()));
-	}
+	set<Point> points = generatePointsForTaxisByPassengers(psngrs, (int)freeTaxis.size());
+	//set<Point> points = generatePointsForTaxisByTaxis(env->getTaxis(), (int)freeTaxis.size());
 	while (!freeTaxis.empty()) {
 		Point p;
 		Taxi t;
