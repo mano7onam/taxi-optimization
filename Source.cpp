@@ -306,7 +306,7 @@ public:
 	// reorder commands to get maximum score from it
 	void optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const;
 
-	void distributeFreeTaxis(map<int, CommandsSequence>& c);
+	void distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c);
 private:
 	map<int, Passenger> _waitingPassengers; // list of undistributed to taxis passengers
 
@@ -345,7 +345,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 				bestAddition = addition;
 			}
 		}
-		newPassengers.emplace_back(bestAddition, p);
+		newPassengers.emplace_back(-bestAddition, p);
 	}
 	sort(newPassengers.rbegin(), newPassengers.rend());
 
@@ -414,11 +414,13 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 	auto psngrs = sortPassengerByBestTaxi(sol->getVectorWaitingPassengers(), taxis);
 
 	updateMapCommands(psngrs, taxis, mTaxiCommands);
+
+	sol->distributeFreeTaxis(psngrs, mTaxiCommands);
 	return mTaxiCommands;
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH);
+	auto m = calcCommands(state, state == ST_FINISH || rand() % 20 == 0);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -874,17 +876,21 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 	}
 }
 
-void SolutionEnvironment::distributeFreeTaxis(map<int, CommandsSequence>& c) {
+void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c) {
+	return;
 	set<Taxi> freeTaxis;
 	for (auto& taxi : env->getTaxis()) {
 		CommandsSequence commands = taxi.commands();
 		commands.clearZeroCommands();
 		if (commands.size()) continue;
-		if (!taxi.isAtBorder()) continue;
+		//if (!taxi.isAtBorder()) continue;
 		freeTaxis.insert(taxi);
 	}
 	int n = freeTaxis.size();
 	set<Point> points;
+	for (auto p : psngrs) {
+		points.insert(p.from());
+	}
 	while (points.size() < n) {
 		points.insert(Point(rand() % env->width(), rand() % env->height()));
 	}
@@ -906,7 +912,7 @@ void SolutionEnvironment::distributeFreeTaxis(map<int, CommandsSequence>& c) {
 		points.erase(p);
 		freeTaxis.erase(t);
 	}
-	assert(points.empty());
+	//assert(points.empty());
 }
 
 vector<Passenger> SolutionEnvironment::getVectorWaitingPassengers() const {
