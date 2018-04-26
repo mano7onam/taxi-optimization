@@ -37,7 +37,7 @@ const double EPS = 1e-12;
 // 0 - no score logging
 // 1 - log only total score in the end
 // 2 - log all passengers' score in the end
-#define _SCORE_LOG 1
+#define _SCORE_LOG 2
 #define _TAXI_LOG 1
 
 // declarations
@@ -399,7 +399,8 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 				bestAddition = addition;
 			}
 		}
-		newPassengers.emplace_back(bestAddition, p);
+		//newPassengers.emplace_back(bestAddition, p);
+		newPassengers.emplace_back(-p.time(), p);
 	}
 	sort(newPassengers.rbegin(), newPassengers.rend());
 
@@ -542,7 +543,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH || rand() % 20 == 0);
+	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 50 == 0*/);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -1230,6 +1231,7 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 }
 
 void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c) {
+	return;
 	set<Taxi> freeTaxis;
 	for (auto& taxi : env->getTaxis()) {
 		CommandsSequence commands = taxi.commands();
