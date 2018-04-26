@@ -30,7 +30,7 @@ const double DOUBLE_INF = 1e9;
 const double EPS = 1e-12;
 const int MAX_ID = 1000;
 
-const int MAX_SECONDS_CNT = 14;
+const int MAX_SECONDS_CNT = 12;
 
 
 // defines
@@ -426,7 +426,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 	vector<pair<double, Passenger>> newPassengers;
 	for (const auto& p : psngrs) {
 		double bestAddition = -DOUBLE_INF;
-		for (const auto& taxi : taxis) {
+		/*for (const auto& taxi : taxis) {
 			auto takePas = Command(p.from(), p.id());
 			auto dropPas = Command(p.to(), -p.id());
 			auto commands = taxi.commands();
@@ -441,7 +441,11 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 				bestAddition = addition;
 			}
 		}
-		newPassengers.emplace_back(bestAddition, p);
+		newPassengers.emplace_back(bestAddition, p);*/
+		double u = 100 + p.getIdealDuration();
+		double t = env->time() - p.time();
+		double d = t * u;
+		newPassengers.emplace_back(d, p);
 	}
 	sort(newPassengers.rbegin(), newPassengers.rend());
 
@@ -601,7 +605,8 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 20 == 0*/);
+	static int c = 0;
+	auto m = calcCommands(state, state == ST_FINISH/* || ++c % 20 == 0*/);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -1489,6 +1494,17 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 			commands = best2.second;
 		}*/
 	}
+}
+
+set<Point> SolutionEnvironment::generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const {
+	set<Point> points;
+	for (auto p : psngrs) {
+		points.insert(p.from());
+	}
+	while (points.size() < n) {
+		points.insert(Point(rand() % env->width(), rand() % env->height()));
+	}
+	return points;
 }
 
 set<Point> SolutionEnvironment::generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const {
