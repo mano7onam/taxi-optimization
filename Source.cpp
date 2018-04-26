@@ -1225,10 +1225,11 @@ void CommandsSequence::clearZeroCommands() {
 	}
 }
 
+Passenger estPassangers[MAX_ID];
+int estHas[MAX_ID];
 double CommandsSequence::estimateScore(const Taxi & taxi) {
 	int nowTime = env->time();
 	Point p = taxi.pos();
-	IdToPassMap passengers; // list of passenger which will be delivered by this command
 	for (auto& command : v) {
 		int a = command.getA();
 		if (a == 0) continue;
@@ -1236,19 +1237,28 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 		Point nxtP = command.getPoint();
 		nowTime += getDistance(p, nxtP);
 		p = nxtP;
-		if (!passengers.count(id)) {
-			passengers[id] = env->getArrPassengerById(id);
+		if (!estHas[id]) {
+			estPassangers[id] = env->getArrPassengerById(id);
 		}
 		if (a > 0) {
-			passengers[id].setWaitingTime(nowTime - passengers[id].time());
+			estPassangers[id].setWaitingTime(nowTime - estPassangers[id].time());
+			estHas[id] = 1;
 		}
 		else {
-			passengers[id].setTotalDuration(nowTime - passengers[id].time());
+			estPassangers[id].setTotalDuration(nowTime - estPassangers[id].time());
+			estHas[id] = 1;
 		}
 	}
 	double res = 0.0;
-	for (auto& el : passengers) {
-		res += el.second.getScore();
+	for (auto& command : v) {
+		int a = command.getA();
+		if (a == 0) continue;
+		int id = abs(a);
+		double res = 0.0;
+		if (a < 0) {
+			res += estPassangers[id].getScore();
+		}
+		estHas[id] = 0;
 	}
 	return res;
 }
