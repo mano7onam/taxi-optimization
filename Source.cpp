@@ -32,7 +32,7 @@ const double EPS = 1e-12;
 
 // defines
 #define LOG cout
-#define LOG_ALL_STATES
+//#define LOG_ALL_STATES
 
 // 0 - no score logging
 // 1 - log only total score in the end
@@ -217,6 +217,9 @@ public:
 	CommandsList::iterator begin() { return v.begin(); }
 	CommandsList::iterator end() { return v.end(); }
 
+	CommandsList::reverse_iterator rbegin() { return v.rbegin(); }
+	CommandsList::reverse_iterator rend() { return v.rend(); }
+
 	CommandsList::const_iterator begin() const { return v.begin(); }
 	CommandsList::const_iterator end() const { return v.end(); }
 protected:
@@ -349,6 +352,9 @@ public:
 	vector<Passenger> getVectorWaitingPassengers() const;
 	set<Passenger> getSetWaitingPassengers() const;
 
+	pair<double, CommandsSequence> getBestPermutation(CommandsSequence cs, const Taxi& taxi);
+	void generateValidPermutations(CommandsSequence& cur, int mask, CommandsSequence& initial, const Taxi& taxi);
+
 	bool isWaitingPassenger(const Passenger &p) const { return (bool)_waitingPassengers.count(p.id()); }
 	void distributePassenger(const Passenger &p) { _waitingPassengers.erase(p.id()); }
 	void distributePassenger(int id) { _waitingPassengers.erase(id); }
@@ -364,6 +370,11 @@ private:
 	IdToPassMap _waitingPassengers; // list of undistributed to taxis passengers
 
 	const int FULL_REORDER_LIMIT = 9;
+
+	// fields used by generateValidPermutations functions
+	int _pcnt;
+	CommandsSequence _pbestSequence;
+	double _pbestScore;
 };
 
 void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
@@ -1245,6 +1256,9 @@ void CommandsSequence::pickUpPassenger(const Passenger &p) {
 // SolutionEnvironment ==================================================================================
 
 pair<double, CommandsSequence> getBestSequenceBruteforce(CommandsSequence commands, const Taxi& taxi) {
+	//return sol->getBestPermutation(commands, taxi);
+
+
 	int fact = 1;
 	for (int i = 2; i < commands.size(); i++) {
 		fact *= i;
@@ -1437,4 +1451,72 @@ vector<Passenger> SolutionEnvironment::getVectorWaitingPassengers() const {
 		res.push_back(el.second);
 	}
 	return res;
+}
+
+pair<double, CommandsSequence> SolutionEnvironment::getBestPermutation(CommandsSequence cs, const Taxi& taxi) {
+	_pbestScore = -1e9;
+	_pcnt = 0;
+	for (auto it = cs.rbegin(); it != cs.rend(); ++it) {
+		Command command = *it;
+		int a = command.getA();
+		assert(a != 0);
+		if (a < 0) {
+			hasCorrect[-a] = 1;
+			_pcnt++;
+		}
+		else {
+			hasCorrect[a] = 0;
+			_pcnt--;
+		}
+	}
+	CommandsSequence cur;
+	generateValidPermutations(cur, 0, cs, taxi);
+
+	for (auto it = cs.rbegin(); it != cs.rend(); ++it) {
+		Command command = *it;
+		int a = command.getA();
+		hasCorrect[abs(a)] = 0;
+	}
+
+	return { _pbestScore, _pbestSequence };
+}
+
+void SolutionEnvironment::generateValidPermutations(CommandsSequence& cur, int mask, CommandsSequence& initial, const Taxi& taxi) {
+	if (mask == (1 << initial.size()) - 1) {
+		double curScore = cur.estimateScore(taxi);
+		if (curScore > _pbestScore) {
+			_pbestScore = curScore;
+			_pbestSequence = cur;
+		}
+		return;
+	}
+	int i = 0;
+	for (auto it = initial.begin(); it != initial.end(); ++it, ++i) {
+		if (mask >> i & 1) continue;
+		Command command = *it;
+		int a = command.getA();
+		int nxtmask = (1 << i) | mask;
+		cur.addCommand(command);
+		assert(a != 0);
+		int id = abs(a);
+		if (a > 0) {
+			if (_pcnt < 4) {
+				_pcnt++;
+				hasCorrect[id] = 1;
+				generateValidPermutations(cur, nxtmask, initial, taxi);
+				_pcnt--;
+				hasCorrect[id] = 0;
+			}
+		}
+		else {
+			if (hasCorrect[id]) {
+				_pcnt--;
+				hasCorrect[id] = 0;
+				generateValidPermutations(cur, nxtmask, initial, taxi);
+				_pcnt++;
+				hasCorrect[id] = 1;
+			}
+		}
+		cur.takeLast();
+	}
 }
