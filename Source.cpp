@@ -1240,69 +1240,54 @@ void CommandsSequence::pickUpPassenger(const Passenger &p) {
 
 // SolutionEnvironment ==================================================================================
 
-void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
-	if (!env->checkToDoOptimizations()) {
-		return;
+pair<double, CommandsSequence> getBestSequenceBruteforce(CommandsSequence commands, const Taxi& taxi) {
+	int fact = 1;
+	for (int i = 2; i < commands.size(); i++) {
+		fact *= i;
 	}
-	if (commands.size() < FULL_REORDER_LIMIT) {
-		int fact = 1;
-		for (int i = 2; i < commands.size(); i++) {
-			fact *= i;
+	CommandsSequence bestSequence = commands;
+	double bestScore = bestSequence.estimateScore(taxi);
+	for (int i = 0; i < fact; i++) {
+		commands.nextPermutation();
+		if (commands.back().getA() > 0) continue;
+		if (!commands.isCorrect()) continue;
+		double curScore = commands.estimateScore(taxi);
+		if (curScore > bestScore) {
+			bestScore = curScore;
+			bestSequence = commands;
 		}
-		CommandsSequence bestSequence = commands;
-		double bestScore = bestSequence.estimateScore(taxi);
-		for (int i = 0; i < fact; i++) {
-			commands.nextPermutation();
-			if (commands.back().getA() > 0) continue;
-			if (!commands.isCorrect()) continue;
-			double curScore = commands.estimateScore(taxi);
-			if (curScore > bestScore) {
-				bestScore = curScore;
-				bestSequence = commands;
-			}
-		}
-		commands = bestSequence;
-	} else {
-		// TODO: when a is zero for a command, it must be at the end
-		// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
-		CommandsSequence betterSequence;
-		vector<Command> zeroCommands;
-		for (auto command : commands) {
-			if (0 == command.getA()) {
-				zeroCommands.push_back(command);
-			} else {
-				betterSequence.addCommand(command);
-			}
-		}
-		for (auto command : zeroCommands) {
+	}
+	return make_pair(bestScore, bestSequence);
+};
+
+pair<double, CommandsSequence> getBestSequenceInsertLast(CommandsSequence commands, const Taxi& taxi) {
+	// TODO: when a is zero for a command, it must be at the end
+	// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
+	CommandsSequence betterSequence;
+	vector<Command> zeroCommands;
+	for (auto command : commands) {
+		if (0 == command.getA()) {
+			zeroCommands.push_back(command);
+		} else {
 			betterSequence.addCommand(command);
 		}
-		commands = betterSequence;
-		Command drop = betterSequence.takeLast();
-		Command take = betterSequence.takeLast();
-		CommandsSequence adding;
-		adding.addCommand(take);
-		adding.addCommand(drop);
-		CommandsSequence resSequence;
-		double mxScore = -1e9;
-		for (int i = 0; i <= betterSequence.size(); i++) {
-			for (int j = i + 1; j - 1 <= betterSequence.size(); ++j) {
-				CommandsSequence curSequqnce = betterSequence;
-				curSequqnce.insert(take, i);
-				curSequqnce.insert(drop, j);
-				if (curSequqnce.isCorrect()) {
-					double curScore = curSequqnce.estimateScore(taxi);
-					if (curScore > mxScore) {
-						mxScore = curScore;
-						resSequence = curSequqnce;
-					}
-				}
-			}
-		}
-		if (mxScore < -100) {
-			int i = betterSequence.size();
+	}
+	for (auto command : zeroCommands) {
+		betterSequence.addCommand(command);
+	}
+	commands = betterSequence;
+	Command drop = betterSequence.takeLast();
+	Command take = betterSequence.takeLast();
+	CommandsSequence adding;
+	adding.addCommand(take);
+	adding.addCommand(drop);
+	CommandsSequence resSequence;
+	double mxScore = -1e9;
+	for (int i = 0; i <= betterSequence.size(); i++) {
+		for (int j = i + 1; j - 1 <= betterSequence.size(); ++j) {
 			CommandsSequence curSequqnce = betterSequence;
-			curSequqnce.insert(adding, i);
+			curSequqnce.insert(take, i);
+			curSequqnce.insert(drop, j);
 			if (curSequqnce.isCorrect()) {
 				double curScore = curSequqnce.estimateScore(taxi);
 				if (curScore > mxScore) {
@@ -1311,8 +1296,37 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 				}
 			}
 		}
-		assert(mxScore > -100);
-		commands = resSequence;
+	}
+	if (mxScore < -100) {
+		int i = betterSequence.size();
+		CommandsSequence curSequqnce = betterSequence;
+		curSequqnce.insert(adding, i);
+		if (curSequqnce.isCorrect()) {
+			double curScore = curSequqnce.estimateScore(taxi);
+			if (curScore > mxScore) {
+				mxScore = curScore;
+				resSequence = curSequqnce;
+			}
+		}
+	}
+	assert(mxScore > -100);
+	return make_pair(mxScore, resSequence);
+};
+
+//pair<double, CommandsSequence> getBestSequenceMinDist(CommandsSequence commands, const Taxi& taxi) {
+//
+//};
+
+void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
+	if (!env->checkToDoOptimizations()) {
+		return;
+	}
+	if (commands.size() < FULL_REORDER_LIMIT) {
+		auto best = getBestSequenceBruteforce(commands, taxi);
+		commands = best.second;
+	} else {
+		auto best = getBestSequenceInsertLast(commands, taxi);
+		commands = best.second;
 	}
 }
 
