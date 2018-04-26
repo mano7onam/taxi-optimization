@@ -208,6 +208,7 @@ public:
 	double estimateScore(const Taxi& taxi);
 
 	void insert(CommandsSequence cs, int ind);
+	void insert(Command c, int ind);
 	void delPrev(int ind);
 
 	void delPassenger(int id);
@@ -362,7 +363,7 @@ public:
 private:
 	IdToPassMap _waitingPassengers; // list of undistributed to taxis passengers
 
-	const int FULL_REORDER_LIMIT = 8;
+	const int FULL_REORDER_LIMIT = 9;
 };
 
 void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
@@ -565,7 +566,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH || rand() % 20 == 0);
+	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 20 == 0*/);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -1198,6 +1199,12 @@ void CommandsSequence::insert(CommandsSequence cs, int ind) {
 	v.insert(it, cs.begin(), cs.end());
 }
 
+void CommandsSequence::insert(Command c, int ind) {
+	auto it = v.begin();
+	for (int i = 0; i < ind; ++i, ++it);
+	v.insert(it, c);
+}
+
 void CommandsSequence::delPrev(int ind) {
 	auto it = v.begin();
 	for (int i = 0; i < ind; ++i, ++it);
@@ -1279,13 +1286,16 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		CommandsSequence resSequence;
 		double mxScore = -1e9;
 		for (int i = 0; i <= betterSequence.size(); i++) {
-			CommandsSequence curSequqnce = betterSequence;
-			curSequqnce.insert(adding, i);
-			if (curSequqnce.isCorrect()) {
-				double curScore = curSequqnce.estimateScore(taxi);
-				if (curScore > mxScore) {
-					mxScore = curScore;
-					resSequence = curSequqnce;
+			for (int j = i + 1; j - 1 <= betterSequence.size(); ++j) {
+				CommandsSequence curSequqnce = betterSequence;
+				curSequqnce.insert(take, i);
+				curSequqnce.insert(drop, j);
+				if (curSequqnce.isCorrect()) {
+					double curScore = curSequqnce.estimateScore(taxi);
+					if (curScore > mxScore) {
+						mxScore = curScore;
+						resSequence = curSequqnce;
+					}
 				}
 			}
 		}
