@@ -30,7 +30,7 @@ const double DOUBLE_INF = 1e9;
 const double EPS = 1e-12;
 const int MAX_ID = 1000;
 
-const int MAX_SECONDS_CNT = 12;
+const int MAX_SECONDS_CNT = 11;
 
 
 // defines
@@ -458,7 +458,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 }
 
 void updateTaxiInfo(map<int, CommandsSequence> &mTaxiCommands, const vector<Taxi> &taxis,
-	int taxiId, Command takePas, Command dropPas)
+                    int taxiId, Command takePas, Command dropPas)
 {
 	// updating taxi info
 	for (auto& taxi : taxis) {
@@ -486,7 +486,7 @@ bool isBadFitTaxiForPassenger(const Passenger &p, const Taxi &t, int minDist) {
 }
 
 void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxis,
-	map<int, CommandsSequence> &mTaxiCommands)
+                       map<int, CommandsSequence> &mTaxiCommands)
 {
 	for (const auto& p : psngrs) {
 		int bestTaxiId = -1;
@@ -521,8 +521,8 @@ void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxi
 }
 
 void updateMapCommandsBrutforcePassengersPermutation(const vector<Passenger> &sourcePsngrs,
-	const vector<Taxi> &taxis,
-	map<int, CommandsSequence> &mTaxiCommands)
+                                                     const vector<Taxi> &taxis,
+                                                     map<int, CommandsSequence> &mTaxiCommands)
 {
 	vector<Passenger> psngrs = sourcePsngrs;
 	vector<Passenger> bestPsngrsSeq;
@@ -951,8 +951,8 @@ string Passenger::toString() const {
 string Passenger::toStringToDraw() const {
 	stringstream ss;
 	ss << _id << ' ' << _time << ' ' <<
-		_pFrom.getX() << ' ' << _pFrom.getY() << ' ' <<
-		_pTo.getX() << ' ' << _pTo.getY() << endl;
+	   _pFrom.getX() << ' ' << _pFrom.getY() << ' ' <<
+	   _pTo.getX() << ' ' << _pTo.getY() << endl;
 
 	string str;
 	getline(ss, str);
@@ -1302,8 +1302,6 @@ void CommandsSequence::pickUpPassenger(const Passenger &p) {
 
 pair<double, CommandsSequence> getBestSequenceBruteforce(CommandsSequence commands, const Taxi& taxi) {
 	//return sol->getBestPermutation(commands, taxi);
-
-
 	int fact = 1;
 	for (int i = 2; i < commands.size(); i++) {
 		fact *= i;
@@ -1483,28 +1481,15 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 	} else {
 //		auto best = getBestSequenceInsertLast(commands, taxi);
 //		commands = best.second;
-//		auto best1 = getBestSequenceMinDist(commands, taxi);
+		//auto best1 = getBestSequenceMinDist(commands, taxi);
 		auto best2 = getBestSequenceInsertLast(commands, taxi);
 		auto best3 = getBestSequenceMoveOne(best2.second, taxi);
-		auto best4 = getBestSequenceMoveOne(best3.second, taxi);
-		commands = best4.second;
-		/*if (best2.first > best2.first) {
-			commands = best2.second;
-		} else {
-			commands = best2.second;
-		}*/
+		commands = best3.second;
+		//if (best1.first > best2.first) {
+		//commands = best1.second;
+		//} else {
+		//	}
 	}
-}
-
-set<Point> SolutionEnvironment::generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const {
-	set<Point> points;
-	for (auto p : psngrs) {
-		points.insert(p.from());
-	}
-	while (points.size() < n) {
-		points.insert(Point(rand() % env->width(), rand() % env->height()));
-	}
-	return points;
 }
 
 set<Point> SolutionEnvironment::generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const {
@@ -1536,7 +1521,7 @@ set<Point> SolutionEnvironment::generatePointsForTaxisByTaxis(const vector<Taxi>
 		for (int i = 0; i < candidats.size(); ++i) {
 			auto curPoint = candidats[i];
 			double totalDist = 0;
-			
+
 			int nearestTaxi = 0;
 			double nearestTaxiDst = 1e18;
 			for (const auto& taxi : taxis) {
