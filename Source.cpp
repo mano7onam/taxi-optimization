@@ -276,6 +276,7 @@ public:
 	Point pos() const { return _pos; }
 	const CommandsSequence& commands() const { return _commands; }
 	const PassengersSet& passengers() const { return _passengers; }
+	list<int> passengersIds() const;
 	int ordersCount() const { return _commands.ordersCount(); } // number of passengers distributed to this taxi
 
 	void update(int prevTime, int curTime);
@@ -1004,6 +1005,14 @@ string Taxi::toStringToDraw() const {
 	return res;
 }
 
+list<int> Taxi::passengersIds() const {
+	list<int> res;
+	for (auto id : _passengersIds) {
+		res.push_back(id);
+	}
+	return res;
+}
+
 // Command ==================================================================================
 int Command::getTimeToPerform(const Point &from) const {
 	return getDistance(from, getPoint());
@@ -1313,9 +1322,72 @@ pair<double, CommandsSequence> getBestSequenceInsertLast(CommandsSequence comman
 	return make_pair(mxScore, resSequence);
 };
 
-//pair<double, CommandsSequence> getBestSequenceMinDist(CommandsSequence commands, const Taxi& taxi) {
-//
-//};
+bool isAvailableCommand(const list<int> &takedPs, const list<int> &deliveredPs, const Command &command) {
+	int aPass = command.getA();
+	int idPass = abs(aPass);
+	if (aPass < 0) {
+		return find(takedPs.begin(), takedPs.end(), idPass) != takedPs.end();
+	}
+	if (find(takedPs.begin(), takedPs.end(), idPass) != takedPs.end()) {
+		return false;
+	}
+	return find(deliveredPs.begin(), deliveredPs.end(), idPass) == takedPs.end();
+}
+
+void addCommandToList(list<int> &takedPs, list<int> &deliveredPs, CommandsSequence &commands, const Command &command) {
+	int aPass = command.getA();
+	int idPass = abs(aPass);
+	if (aPass < 0) {
+		takedPs.remove(idPass);
+		deliveredPs.push_back(idPass);
+	} else {
+		takedPs.push_back(idPass);
+		assert(find(deliveredPs.begin(), deliveredPs.end(), idPass) == deliveredPs.end());
+	}
+	commands.addCommand(command);
+}
+
+pair<double, CommandsSequence> getBestSequenceMinDist(CommandsSequence commands, const Taxi& taxi) {
+	CommandsSequence resSequence;
+	double mxScore = -1e9;
+	for (Command firstCommand : commands) {
+		list<int> takedPs = taxi.passengersIds();
+		list<int> deliveredPs;
+		int aFirst = firstCommand.getA();
+		if (aFirst < 0 && find(takedPs.begin(), takedPs.end(), -aFirst) == takedPs.end()) {
+			continue;
+		}
+		if (aFirst > 0) {
+			takedPs.push_back(aFirst);
+		} else {
+			takedPs.remove(aFirst);
+			deliveredPs.push_back(aFirst);
+		}
+		CommandsSequence curCommands;
+		curCommands.addCommand(firstCommand);
+		while (curCommands.size() < commands.size()) {
+			Command addBestCommand;
+			double distBestCommand = DOUBLE_INF;
+			for (auto command : commands) {
+				if (isAvailableCommand(takedPs, deliveredPs, command)) {
+					double comDist = getDistance(curCommands.back(), command.getPoint());
+					if (comDist < distBestCommand) {
+						distBestCommand = comDist;
+						addBestCommand = command;
+					}
+				}
+			}
+			addCommandToList(takedPs, deliveredPs, curCommands, addBestCommand);
+		}
+		double curScore = curCommands.estimateScore(taxi);
+		if (curScore > mxScore) {
+			mxScore = curScore;
+			resSequence = curCommands;
+		}
+	}
+	assert(mxScore > -100);
+	return make_pair(mxScore, resSequence);
+};
 
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
 	if (!env->checkToDoOptimizations()) {
@@ -1325,7 +1397,9 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		auto best = getBestSequenceBruteforce(commands, taxi);
 		commands = best.second;
 	} else {
-		auto best = getBestSequenceInsertLast(commands, taxi);
+//		auto best = getBestSequenceInsertLast(commands, taxi);
+//		commands = best.second;
+		auto best = getBestSequenceMinDist(commands, taxi);
 		commands = best.second;
 	}
 }
