@@ -28,6 +28,9 @@ typedef long long ll;
 const int INF = 1e9 + 7;
 const double DOUBLE_INF = 1e9;
 const double EPS = 1e-12;
+const int MAX_ID = 1000;
+
+const int MAX_SECONDS_CNT = 14;
 
 
 // defines
@@ -83,6 +86,7 @@ public:
 	Passenger getFreePassengerById(int id);
 	Passenger getWayPassengerById(int id);
 	Passenger& getAllPassengerById(int id);
+	Passenger& getArrPassengerById(int id);
 	void setPassengerInWayById(int id);
 	void delWayPassengerById(int id);
 
@@ -113,6 +117,9 @@ protected:
 	IdToPassMap _wayPassengers;
 	IdToPassMap _freePassengers;
 	IdToPassMap _allPassengers; // used to check score in the end
+
+	Passenger* _passArray;
+
 	long long startWorkingTime;
 	mutable bool flagDoOptimizations;
 };
@@ -175,7 +182,6 @@ protected:
 
 // sequence of commands for taxi
 using CommandsList = list<Command>;
-const int MAX_ID = 1000;
 int hasCorrect[MAX_ID];
 class CommandsSequence {
 public:
@@ -629,6 +635,8 @@ Environment::Environment() {
 	_maxPsngId = 0;
 	_maxTaxiId = 0;
 
+	_passArray = new Passenger[MAX_ID];
+
 	startWorkingTime = clock();
 	flagDoOptimizations = true;
 }
@@ -654,6 +662,7 @@ void Environment::update(const Passenger &passenger) {
 
 	_freePassengers[passenger.id()] = passenger;
 	_allPassengers[passenger.id()] = passenger;
+	_passArray[passenger.id()] = passenger;
 
 #ifdef LOG_ALL_STATES
 	for (auto& el : _taxis) {
@@ -783,8 +792,12 @@ Passenger Environment::getWayPassengerById(int id) {
 	return _wayPassengers[id];
 }
 
-Passenger & Environment::getAllPassengerById(int id) {
+Passenger& Environment::getAllPassengerById(int id) {
 	return _allPassengers[id];
+}
+
+Passenger & Environment::getArrPassengerById(int id) {
+	return _passArray[id];
 }
 
 void Environment::delWayPassengerById(int id) {
@@ -832,7 +845,7 @@ bool Environment::checkToDoOptimizations() const {
 		return false;
 	}
 	double currTime = (double)(clock() - startWorkingTime) / CLOCKS_PER_SEC;
-	if (currTime > 11) {
+	if (currTime > MAX_SECONDS_CNT) {
 		flagDoOptimizations = false;
 	}
 	return flagDoOptimizations;
@@ -974,6 +987,7 @@ void Taxi::update(int prevTime, int curTime) {
 				addPassenger(p);
 				env->setPassengerInWayById(idPassenger);
 				env->getAllPassengerById(idPassenger).setWaitingTime(nowTime - p.time());
+				env->getArrPassengerById(idPassenger).setWaitingTime(nowTime - p.time());
 			}
 			else if (idPassenger < 0) {
 				idPassenger = -idPassenger;
@@ -982,6 +996,7 @@ void Taxi::update(int prevTime, int curTime) {
 				delPassenger(p);
 				env->delWayPassengerById(idPassenger);
 				env->getAllPassengerById(idPassenger).setTotalDuration(nowTime - p.time());
+				env->getArrPassengerById(idPassenger).setTotalDuration(nowTime - p.time());
 			}
 
 			restTime -= needTime;
@@ -1201,7 +1216,7 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 		nowTime += getDistance(p, nxtP);
 		p = nxtP;
 		if (!passengers.count(id)) {
-			passengers[id] = env->getAllPassengerById(id);
+			passengers[id] = env->getArrPassengerById(id);
 		}
 		if (a > 0) {
 			passengers[id].setWaitingTime(nowTime - passengers[id].time());
@@ -1311,9 +1326,9 @@ pair<double, CommandsSequence> getBestSequenceInsertLast(CommandsSequence comman
 	CommandsSequence resSequence;
 	double mxScore = -1e9;
 	for (int i = 0; i <= betterSequence.size(); i++) {
-		for (int j = i + 1; j - 1 <= betterSequence.size(); ++j) {
-			CommandsSequence curSequqnce = betterSequence;
-			curSequqnce.insert(take, i);
+		CommandsSequence curSequqnce = betterSequence;
+		curSequqnce.insert(take, i);
+		for (int j = i + 1; j <= curSequqnce.size(); ++j) {
 			curSequqnce.insert(drop, j);
 			if (curSequqnce.isCorrect()) {
 				double curScore = curSequqnce.estimateScore(taxi);
@@ -1322,6 +1337,7 @@ pair<double, CommandsSequence> getBestSequenceInsertLast(CommandsSequence comman
 					resSequence = curSequqnce;
 				}
 			}
+			curSequqnce.delPrev(j + 1);
 		}
 	}
 	if (mxScore < -100) {
