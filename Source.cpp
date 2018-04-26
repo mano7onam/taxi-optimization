@@ -208,7 +208,11 @@ public:
 	double estimateScore(const Taxi& taxi);
 
 	void insert(CommandsSequence cs, int ind);
+	void insert(Command c, int ind);
 	void delPrev(int ind);
+
+	void delPassenger(int id);
+	void pickUpPassenger(const Passenger &p);
 
 	CommandsList::iterator begin() { return v.begin(); }
 	CommandsList::iterator end() { return v.end(); }
@@ -247,6 +251,9 @@ public:
 
 	string toStringToDraw() const;
 
+	void distributeToTaxi(int idTaxi) { _idTaxi = idTaxi; }
+	void deleteDistributionToTaxi() { _idTaxi = -1; }
+
 protected:
 	int _id;
 	int _time;     // time when this passenger appeared
@@ -255,6 +262,8 @@ protected:
 
 	int _waitingTime;   // d1 for score calculation
 	int _totalDuration; // used for d2 calculation
+
+	int _idTaxi;
 };
 
 class Taxi {
@@ -271,6 +280,9 @@ public:
 
 	void update(int prevTime, int curTime);
 	void updateCommands(const CommandsSequence &commands) { _commands = commands; }
+
+	bool isGoodToPickUp(const Passenger &p) const;
+	void pickUpPassenger(const Passenger &p);
 
 	void addPassenger(const Passenger &p);
 	void delPassenger(const Passenger &p);
@@ -555,7 +567,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH);
+	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 20 == 0*/);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -910,6 +922,16 @@ void Taxi::ask() {
 Taxi::Taxi() {
 }
 
+bool Taxi::isGoodToPickUp(const Passenger &p) const {
+	auto firstCommand = *commands().begin();
+	double oldDist = getDistance(_pos, firstCommand.getPoint());
+	double newDist =
+			getDistance(_pos, p.from()) +
+			getDistance(p.from(), p.to()) +
+			getDistance(p.to(), firstCommand.getPoint());
+	return newDist < oldDist * 1.5;
+}
+
 void Taxi::addPassenger(const Passenger &p) {
 	assert(static_cast<int>(_passengers.size()) < 4);
 	_passengers.insert(p);
@@ -1181,86 +1203,134 @@ void CommandsSequence::insert(CommandsSequence cs, int ind) {
 	v.insert(it, cs.begin(), cs.end());
 }
 
+void CommandsSequence::insert(Command c, int ind) {
+	auto it = v.begin();
+	for (int i = 0; i < ind; ++i, ++it);
+	v.insert(it, c);
+}
+
 void CommandsSequence::delPrev(int ind) {
 	auto it = v.begin();
 	for (int i = 0; i < ind; ++i, ++it);
 	v.erase(--it);
 }
 
+void CommandsSequence::delPassenger(int id) {
+	CommandsList::iterator it_land;
+	for (it_land = v.begin(); it_land != v.end(); it_land++) {
+		if (it_land->getA() == id) {
+			break;
+		}
+	}
+	assert(it_land != v.end());
+	v.erase(it_land);
+
+	CommandsList::iterator it_debarkation;
+	for (it_debarkation = v.begin(); it_debarkation != v.end(); it_debarkation++) {
+		if (it_debarkation->getA() == -id) {
+			break;
+		}
+	}
+	assert(it_debarkation != v.end());
+	v.erase(it_debarkation);
+}
+
+void CommandsSequence::pickUpPassenger(const Passenger &p) {
+	Command pLand(p.from(), p.id());
+	Command pDebark(p.from(), p.id());
+	v.push_front(pDebark);
+	v.push_front(pLand);
+}
+
 // SolutionEnvironment ==================================================================================
+
+pair<double, CommandsSequence> getBestSequenceBruteforce(CommandsSequence commands, const Taxi& taxi) {
+	int fact = 1;
+	for (int i = 2; i < commands.size(); i++) {
+		fact *= i;
+	}
+	CommandsSequence bestSequence = commands;
+	double bestScore = bestSequence.estimateScore(taxi);
+	for (int i = 0; i < fact; i++) {
+		commands.nextPermutation();
+		if (commands.back().getA() > 0) continue;
+		if (!commands.isCorrect()) continue;
+		double curScore = commands.estimateScore(taxi);
+		if (curScore > bestScore) {
+			bestScore = curScore;
+			bestSequence = commands;
+		}
+	}
+	return make_pair(bestScore, bestSequence);
+};
+
+pair<double, CommandsSequence> getBestSequenceInsertLast(CommandsSequence commands, const Taxi& taxi) {
+	// TODO: when a is zero for a command, it must be at the end
+	// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
+	CommandsSequence betterSequence;
+	vector<Command> zeroCommands;
+	for (auto command : commands) {
+		if (0 == command.getA()) {
+			zeroCommands.push_back(command);
+		} else {
+			betterSequence.addCommand(command);
+		}
+	}
+	for (auto command : zeroCommands) {
+		betterSequence.addCommand(command);
+	}
+	commands = betterSequence;
+	Command drop = betterSequence.takeLast();
+	Command take = betterSequence.takeLast();
+	CommandsSequence adding;
+	adding.addCommand(take);
+	adding.addCommand(drop);
+	CommandsSequence resSequence;
+	double mxScore = -1e9;
+	for (int i = 0; i <= betterSequence.size(); i++) {
+		for (int j = i + 1; j - 1 <= betterSequence.size(); ++j) {
+			CommandsSequence curSequqnce = betterSequence;
+			curSequqnce.insert(take, i);
+			curSequqnce.insert(drop, j);
+			if (curSequqnce.isCorrect()) {
+				double curScore = curSequqnce.estimateScore(taxi);
+				if (curScore > mxScore) {
+					mxScore = curScore;
+					resSequence = curSequqnce;
+				}
+			}
+		}
+	}
+	if (mxScore < -100) {
+		int i = betterSequence.size();
+		CommandsSequence curSequqnce = betterSequence;
+		curSequqnce.insert(adding, i);
+		if (curSequqnce.isCorrect()) {
+			double curScore = curSequqnce.estimateScore(taxi);
+			if (curScore > mxScore) {
+				mxScore = curScore;
+				resSequence = curSequqnce;
+			}
+		}
+	}
+	assert(mxScore > -100);
+	return make_pair(mxScore, resSequence);
+};
+
+//pair<double, CommandsSequence> getBestSequenceMinDist(CommandsSequence commands, const Taxi& taxi) {
+//
+//};
 
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
 	if (!env->checkToDoOptimizations()) {
 		return;
 	}
 	if (commands.size() < FULL_REORDER_LIMIT) {
-		int fact = 1;
-		for (int i = 2; i < commands.size(); i++) {
-			fact *= i;
-		}
-		CommandsSequence bestSequence = commands;
-		double bestScore = bestSequence.estimateScore(taxi);
-		for (int i = 0; i < fact; i++) {
-			commands.nextPermutation();
-			if (commands.back().getA() > 0) continue;
-			if (!commands.isCorrect()) continue;
-			double curScore = commands.estimateScore(taxi);
-			if (curScore > bestScore) {
-				bestScore = curScore;
-				bestSequence = commands;
-			}
-		}
-		commands = bestSequence;
-	}
-	else {
-		// TODO: when a is zero for a command, it must be at the end
-		// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
-		CommandsSequence betterSequence;
-		vector<Command> zeroCommands;
-		for (auto command : commands) {
-			if (0 == command.getA()) {
-				zeroCommands.push_back(command);
-			}
-			else {
-				betterSequence.addCommand(command);
-			}
-		}
-		for (auto command : zeroCommands) {
-			betterSequence.addCommand(command);
-		}
-		commands = betterSequence;
-		Command drop = betterSequence.takeLast();
-		Command take = betterSequence.takeLast();
-		CommandsSequence adding;
-		adding.addCommand(take);
-		adding.addCommand(drop);
-		CommandsSequence resSequence;
-		double mxScore = -1e9;
-		for (int i = 0; i <= betterSequence.size(); i++) {
-			CommandsSequence curSequqnce = betterSequence;
-			curSequqnce.insert(adding, i);
-			if (curSequqnce.isCorrect()) {
-				double curScore = curSequqnce.estimateScore(taxi);
-				if (curScore > mxScore) {
-					mxScore = curScore;
-					resSequence = curSequqnce;
-				}
-			}
-		}
-		if (mxScore < -100) {
-			int i = betterSequence.size();
-			CommandsSequence curSequqnce = betterSequence;
-			curSequqnce.insert(adding, i);
-			if (curSequqnce.isCorrect()) {
-				double curScore = curSequqnce.estimateScore(taxi);
-				if (curScore > mxScore) {
-					mxScore = curScore;
-					resSequence = curSequqnce;
-				}
-			}
-		}
-		assert(mxScore > -100);
-		commands = resSequence;
+		auto best = getBestSequenceBruteforce(commands, taxi);
+		commands = best.second;
+	} else {
+		auto best = getBestSequenceInsertLast(commands, taxi);
+		commands = best.second;
 	}
 }
 
