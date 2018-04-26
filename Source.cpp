@@ -30,7 +30,7 @@ const double DOUBLE_INF = 1e9;
 const double EPS = 1e-12;
 const int MAX_ID = 1000;
 
-const int MAX_SECONDS_CNT = 14;
+const int MAX_SECONDS_CNT = 12;
 
 
 // defines
@@ -378,7 +378,7 @@ public:
 private:
 	IdToPassMap _waitingPassengers; // list of undistributed to taxis passengers
 
-	const int FULL_REORDER_LIMIT = 9;
+	const int FULL_REORDER_LIMIT = 8;
 
 	// fields used by generateValidPermutations functions
 	int _pcnt;
@@ -1535,7 +1535,11 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		//auto best1 = getBestSequenceMinDist(commands, taxi);
 		auto best2 = getBestSequenceInsertLast(commands, taxi);
 		auto best3 = getBestSequenceMoveOne(best2.second, taxi);
-		commands = best3.second;
+		auto best4 = getBestSequenceMoveOne(best3.second, taxi);
+		auto best5 = getBestSequenceMoveOne(best4.second, taxi);
+		auto best6 = getBestSequenceMoveOne(best5.second, taxi);
+		//auto best7 = getBestSequenceMoveOne(best6.second, taxi);
+		commands = best6.second;
 		//if (best1.first > best2.first) {
 		//commands = best1.second;
 		//} else {
