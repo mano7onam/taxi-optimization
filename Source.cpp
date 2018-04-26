@@ -211,6 +211,8 @@ public:
 
 	// estimate score we will get for performing these commands
 	// if we assign it to certain taxi
+	double estimateScoreA(const Taxi& taxi);
+	double estimateScoreB(const Taxi& taxi);
 	double estimateScore(const Taxi& taxi);
 
 	void insert(CommandsSequence cs, int ind);
@@ -1226,9 +1228,37 @@ void CommandsSequence::clearZeroCommands() {
 	}
 }
 
+double CommandsSequence::estimateScoreA(const Taxi & taxi) {
+	int nowTime = env->time();
+	Point p = taxi.pos();
+	IdToPassMap passengers; // list of passenger which will be delivered by this command
+	for (auto& command : v) {
+		int a = command.getA();
+		if (a == 0) continue;
+		int id = abs(a);
+		Point nxtP = command.getPoint();
+		nowTime += getDistance(p, nxtP);
+		p = nxtP;
+		if (!passengers.count(id)) {
+			passengers[id] = env->getArrPassengerById(id);
+		}
+		if (a > 0) {
+			passengers[id].setWaitingTime(nowTime - passengers[id].time());
+		}
+		else {
+			passengers[id].setTotalDuration(nowTime - passengers[id].time());
+		}
+	}
+	double res = 0.0;
+	for (auto& el : passengers) {
+		res += el.second.getScore();
+	}
+	return res;
+}
+
 Passenger estPassangers[MAX_ID];
 int estHas[MAX_ID];
-double CommandsSequence::estimateScore(const Taxi & taxi) {
+double CommandsSequence::estimateScoreB(const Taxi & taxi) {
 	int nowTime = env->time();
 	Point p = taxi.pos();
 	for (auto& command : v) {
@@ -1255,13 +1285,21 @@ double CommandsSequence::estimateScore(const Taxi & taxi) {
 		int a = command.getA();
 		if (a == 0) continue;
 		int id = abs(a);
-		double res = 0.0;
 		if (a < 0) {
 			res += estPassangers[id].getScore();
 		}
 		estHas[id] = 0;
 	}
 	return res;
+}
+
+double CommandsSequence::estimateScore(const Taxi & taxi) {
+	return estimateScoreB(taxi);
+	if (estimateScoreA(taxi) != estimateScoreB(taxi)) {
+		assert(false);
+		estimateScoreB(taxi);
+	}
+	return estimateScoreA(taxi);
 }
 
 void CommandsSequence::insert(CommandsSequence cs, int ind) {
