@@ -30,7 +30,7 @@ const double DOUBLE_INF = 1e9;
 const double EPS = 1e-12;
 const int MAX_ID = 1000;
 
-const int MAX_SECONDS_CNT = 11;
+const int MAX_SECONDS_CNT = 14;
 
 
 // defines
@@ -867,6 +867,7 @@ bool Environment::checkToDoOptimizations() const {
 	}
 	double currTime = (double)(clock() - startWorkingTime) / CLOCKS_PER_SEC;
 	if (currTime > MAX_SECONDS_CNT) {
+		// assert(false);
 		flagDoOptimizations = false;
 	}
 	return flagDoOptimizations;
@@ -1464,10 +1465,11 @@ pair<double, CommandsSequence> getBestSequenceMoveOne(CommandsSequence commands,
 			}
 			withoutOneCommands.addCommand(c);
 		}
+		auto curCommands = withoutOneCommands;
 		for (int i = 0; i <= withoutOneCommands.size(); i++) {
-			auto curCommands = withoutOneCommands;
 			curCommands.insert(pasteCommand, i);
 			if (!curCommands.isCorrect()) {
+				curCommands.delPrev(i + 1);
 				continue;
 			}
 			double curScore = curCommands.estimateScore(taxi);
@@ -1475,6 +1477,7 @@ pair<double, CommandsSequence> getBestSequenceMoveOne(CommandsSequence commands,
 				mxScore = curScore;
 				resSequence = curCommands;
 			}
+			curCommands.delPrev(i + 1);
 		}
 	}
 	assert(mxScore > -100);
