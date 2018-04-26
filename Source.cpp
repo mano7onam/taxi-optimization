@@ -463,6 +463,18 @@ void updateTaxiInfo(map<int, CommandsSequence> &mTaxiCommands, const vector<Taxi
 	}
 }
 
+int getMinDistPassengerToTaxis(const Passenger &p, const vector<Taxi> &taxis) {
+	int res = INF;
+	for (const auto& taxi : taxis) {
+		res = min(res, getDistance(p.from(), taxi.pos()));
+	}
+	return res;
+}
+
+bool isBadFitTaxiForPassenger(const Passenger &p, const Taxi &t, int minDist) {
+	return getDistance(t.pos(), p.from()) > minDist * 8;
+}
+
 void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxis,
 	map<int, CommandsSequence> &mTaxiCommands)
 {
@@ -473,7 +485,11 @@ void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxi
 		Command takePas = Command(p.from(), p.id());
 		Command dropPas = Command(p.to(), -p.id());
 
-		for (auto& taxi : taxis) {
+		int minDistPTaxis = getMinDistPassengerToTaxis(p, taxis);
+		for (const auto& taxi : taxis) {
+//			if (isBadFitTaxiForPassenger(p, taxi, minDistPTaxis)) {
+//				continue;
+//			}
 			CommandsSequence commands = mTaxiCommands.count(taxi.id()) ? mTaxiCommands[taxi.id()] : taxi.commands();
 			double wasScore = commands.estimateScore(taxi);
 			commands.addCommand(takePas);
@@ -941,7 +957,7 @@ bool Taxi::isGoodToPickUp(const Passenger &p) const {
 			getDistance(_pos, p.from()) +
 			getDistance(p.from(), p.to()) +
 			getDistance(p.to(), firstCommand.getPoint());
-	return newDist < oldDist * 1.5;
+	return newDist < oldDist * 1.2;
 }
 
 void Taxi::addPassenger(const Passenger &p) {
@@ -1417,9 +1433,9 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 	} else {
 //		auto best = getBestSequenceInsertLast(commands, taxi);
 //		commands = best.second;
-		auto best1 = getBestSequenceMinDist(commands, taxi);
+//		auto best1 = getBestSequenceMinDist(commands, taxi);
 		auto best2 = getBestSequenceInsertLast(commands, taxi);
-		if (best1.first > best2.first) {
+		if (best2.first > best2.first) {
 			commands = best2.second;
 		} else {
 			commands = best2.second;
