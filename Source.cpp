@@ -32,12 +32,12 @@ const double EPS = 1e-12;
 
 // defines
 #define LOG cout
-//#define LOG_ALL_STATES
+#define LOG_ALL_STATES
 
 // 0 - no score logging
 // 1 - log only total score in the end
 // 2 - log all passengers' score in the end
-#define _SCORE_LOG 2
+#define _SCORE_LOG 1
 #define _TAXI_LOG 1
 
 // declarations
@@ -85,7 +85,7 @@ public:
 	Passenger& getAllPassengerById(int id);
 	void setPassengerInWayById(int id);
 	void delWayPassengerById(int id);
-	
+
 	int takeNextPassengerId();
 	int takeNextTaxiId();
 
@@ -126,7 +126,7 @@ public:
 
 	int getX() const { return x; }
 	int getY() const { return y; }
-	
+
 	void setX(int x);
 	void setY(int y);
 
@@ -156,7 +156,7 @@ public:
 	Point getPoint() const { return Point(x, y); }
 
 	// can perform full command
-	int getTimeToPerform(const Point &from) const; 
+	int getTimeToPerform(const Point &from) const;
 
 	// perform part of command - get new position of taxi in the path
 	Point performPart(const Point &from, int haveTime);
@@ -169,7 +169,7 @@ public:
 
 	string toStringDraw() const;
 
-protected:	
+protected:
 	int a;
 };
 
@@ -198,7 +198,7 @@ public:
 	bool isCorrectL() const;
 	bool isCorrect() const; // check order and that taxi capacity is enough to perform this sequence
 	bool isEmpty() { return v.empty(); }
-	
+
 	void clearZeroCommands();
 
 	void nextPermutation() { next_permutation(v.begin(), v.end()); }
@@ -235,7 +235,7 @@ public:
 	bool isFinish() const;
 
 	bool operator < (const Passenger &p) const { return _id < p._id; }
-	
+
 	int getPathLength();
 	int getIdealDuration() const { return getDistance(_pFrom, _pTo); } // w0 from statements
 
@@ -262,7 +262,7 @@ public:
 	void ask();
 
 	Taxi();
-	
+
 	int id() const { return _id; }
 	Point pos() const { return _pos; }
 	const CommandsSequence& commands() const { return _commands; }
@@ -337,7 +337,7 @@ public:
 	vector<Passenger> getVectorWaitingPassengers() const;
 	set<Passenger> getSetWaitingPassengers() const;
 
-	bool isWaitingPassenger(const Passenger &p) const {return (bool)_waitingPassengers.count(p.id()); }
+	bool isWaitingPassenger(const Passenger &p) const { return (bool)_waitingPassengers.count(p.id()); }
 	void distributePassenger(const Passenger &p) { _waitingPassengers.erase(p.id()); }
 	void distributePassenger(int id) { _waitingPassengers.erase(id); }
 	void addPassenger(const Passenger &p) { _waitingPassengers[p.id()] = p; }
@@ -351,7 +351,7 @@ public:
 private:
 	IdToPassMap _waitingPassengers; // list of undistributed to taxis passengers
 
-	const int FULL_REORDER_LIMIT = 8;
+	const int FULL_REORDER_LIMIT = 9;
 };
 
 void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
@@ -411,8 +411,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 				bestAddition = addition;
 			}
 		}
-		//newPassengers.emplace_back(bestAddition, p);
-		newPassengers.emplace_back(-p.time(), p);
+		newPassengers.emplace_back(bestAddition, p);
 	}
 	sort(newPassengers.rbegin(), newPassengers.rend());
 
@@ -425,7 +424,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 }
 
 void updateTaxiInfo(map<int, CommandsSequence> &mTaxiCommands, const vector<Taxi> &taxis,
-                    int taxiId, Command takePas, Command dropPas)
+	int taxiId, Command takePas, Command dropPas)
 {
 	// updating taxi info
 	for (auto& taxi : taxis) {
@@ -441,7 +440,7 @@ void updateTaxiInfo(map<int, CommandsSequence> &mTaxiCommands, const vector<Taxi
 }
 
 void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxis,
-                       map<int, CommandsSequence> &mTaxiCommands)
+	map<int, CommandsSequence> &mTaxiCommands)
 {
 	for (const auto& p : psngrs) {
 		int bestTaxiId = -1;
@@ -472,8 +471,8 @@ void updateMapCommands(const vector<Passenger> &psngrs, const vector<Taxi> &taxi
 }
 
 void updateMapCommandsBrutforcePassengersPermutation(const vector<Passenger> &sourcePsngrs,
-                                                     const vector<Taxi> &taxis,
-                                                     map<int, CommandsSequence> &mTaxiCommands)
+	const vector<Taxi> &taxis,
+	map<int, CommandsSequence> &mTaxiCommands)
 {
 	vector<Passenger> psngrs = sourcePsngrs;
 	vector<Passenger> bestPsngrsSeq;
@@ -547,7 +546,8 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 
 	if (/*psngrs.size() < 5*/false && env->checkToDoOptimizations()) {
 		updateMapCommandsBrutforcePassengersPermutation(psngrs, taxis, mTaxiCommands);
-	} else {
+	}
+	else {
 		updateMapCommands(psngrs, taxis, mTaxiCommands);
 	}
 	sol->distributeFreeTaxis(psngrs, mTaxiCommands);
@@ -555,7 +555,7 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 50 == 0*/);
+	auto m = calcCommands(state, state == ST_FINISH);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -624,7 +624,7 @@ void Environment::update(const Passenger &passenger) {
 		for (auto& el : _taxis) {
 			el.update(curTime - 1, curTime);
 		}
-		logStateToDraw("log", curTime);
+		logStateToDraw("C:\\Users\\amalykh\\source\\repos\\WildcardVisualizer\\WildcardVisualizer\\bin\\Release\\log", curTime);
 	}
 #endif
 
@@ -755,8 +755,8 @@ void Environment::setPassengerInWayById(int id) {
 }
 
 Passenger Environment::getWayPassengerById(int id) {
-  assert(_wayPassengers.count(id) != 0);
-  return _wayPassengers[id];
+	assert(_wayPassengers.count(id) != 0);
+	return _wayPassengers[id];
 }
 
 Passenger & Environment::getAllPassengerById(int id) {
@@ -769,7 +769,7 @@ void Environment::delWayPassengerById(int id) {
 }
 
 void Environment::logStateToDraw(const string &filename, int logTime) const {
-	string myfilename = "log/log";
+	string myfilename = "C:\\Users\\amalykh\\source\\repos\\WildcardVisualizer\\WildcardVisualizer\\bin\\Release\\log";
 	ofstream out(myfilename + std::to_string(logTime));
 
 	//cerr << logTime << endl;
@@ -867,7 +867,7 @@ bool Passenger::isFinish() const {
 }
 
 int Passenger::getPathLength() {
-  return getDistance(_pFrom, _pTo);
+	return getDistance(_pFrom, _pTo);
 }
 
 double Passenger::getScore() const {
@@ -893,8 +893,8 @@ string Passenger::toString() const {
 string Passenger::toStringToDraw() const {
 	stringstream ss;
 	ss << _id << ' ' << _time << ' ' <<
-	        _pFrom.getX() << ' ' << _pFrom.getY() << ' ' <<
-			_pTo.getX() << ' ' << _pTo.getY() << endl;
+		_pFrom.getX() << ' ' << _pFrom.getY() << ' ' <<
+		_pTo.getX() << ' ' << _pTo.getY() << endl;
 
 	string str;
 	getline(ss, str);
@@ -932,7 +932,7 @@ void Taxi::update(int prevTime, int curTime) {
 			int nowTime = prevTime + (timeDiff - (restTime - needTime)); // env time when this command will be done
 			_commands.popFirst();
 			_pos = firstComm.getPoint();
-			
+
 			int idPassenger = firstComm.getA();
 			if (idPassenger > 0) {
 				Passenger p = env->getFreePassengerById(idPassenger);
@@ -940,7 +940,8 @@ void Taxi::update(int prevTime, int curTime) {
 				addPassenger(p);
 				env->setPassengerInWayById(idPassenger);
 				env->getAllPassengerById(idPassenger).setWaitingTime(nowTime - p.time());
-			} else if (idPassenger < 0) {
+			}
+			else if (idPassenger < 0) {
 				idPassenger = -idPassenger;
 				Passenger p = env->getWayPassengerById(idPassenger);
 				assert(p.to() == _pos);
@@ -948,9 +949,10 @@ void Taxi::update(int prevTime, int curTime) {
 				env->delWayPassengerById(idPassenger);
 				env->getAllPassengerById(idPassenger).setTotalDuration(nowTime - p.time());
 			}
-			
+
 			restTime -= needTime;
-		} else {
+		}
+		else {
 			_pos = firstComm.performPart(_pos, restTime);
 			break;
 		}
@@ -991,7 +993,7 @@ int Command::getTimeToPerform(const Point &from) const {
 Point Command::performPart(const Point &from, int haveTime) {
 	int dx = (from.getX() < getPoint().getX()) ? 1 : -1;
 	int dy = (from.getY() < getPoint().getY()) ? 1 : -1;
-	
+
 	int diffX = abs(from.getX() - getPoint().getX());
 	int diffY = abs(from.getY() - getPoint().getY());
 	assert(diffX + diffY > haveTime);
@@ -1002,7 +1004,8 @@ Point Command::performPart(const Point &from, int haveTime) {
 	if (haveTime >= diffX) {
 		resX = getPoint().getX();
 		resY += dy * (haveTime - diffX);
-	} else {
+	}
+	else {
 		resX += dx * haveTime;
 	}
 
@@ -1124,7 +1127,7 @@ bool CommandsSequence::isCorrectL() const {
 
 bool CommandsSequence::isCorrect() const {
 	//assert(isCorrectL() == isCorrectS()); {
-		//isCorrectL();
+	//isCorrectL();
 	//}
 	return isCorrectL();
 }
@@ -1208,7 +1211,8 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 			}
 		}
 		commands = bestSequence;
-	} else {
+	}
+	else {
 		// TODO: when a is zero for a command, it must be at the end
 		// TODO: reorder if there are more commands, actually not sure if there are a lot of such cases
 		CommandsSequence betterSequence;
@@ -1216,7 +1220,8 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		for (auto command : commands) {
 			if (0 == command.getA()) {
 				zeroCommands.push_back(command);
-			} else {
+			}
+			else {
 				betterSequence.addCommand(command);
 			}
 		}
@@ -1274,27 +1279,43 @@ set<Point> SolutionEnvironment::generatePointsForTaxisByTaxis(const vector<Taxi>
 	set<Point> result;
 
 	vector<Point> candidats;
+	int bw = env->width() * 0.1;
+	int bh = env->height() * 0.1;
 	for (int i = 0; i < 500; ++i) {
-		candidats.emplace_back(rand() % env->width(), rand() % env->height());
+		candidats.emplace_back(rand() % (env->width() - 2*bw) + bw, rand() % (env->height() - 2*bh) + bh);
 	}
 
-	double taxiW = 0.002;
-	double pointW = 0.001;
+	double taxiW = 0.5;
+	double pointW = 1.0;
 	while (result.size() < num) {
 		double bestTotalDist = 0;
 		int bestPointId = 0;
 		for (int i = 0; i < candidats.size(); ++i) {
 			auto curPoint = candidats[i];
 			double totalDist = 0;
-			int totalSz = (int)taxis.size() + (int)result.size();
-			assert(totalSz != 0);
+			
+			int nearestTaxi = 0;
+			double nearestTaxiDst = 1e18;
 			for (const auto& taxi : taxis) {
-				totalDist += getDistance(taxi.pos(), curPoint) * taxiW;
+				double d = getDistance(taxi.pos(), curPoint);
+				//totalDist += taxiW / (d * d);
+				if (d < nearestTaxiDst) {
+					nearestTaxi = taxi.id();
+					nearestTaxiDst = d;
+				}
 			}
+			totalDist = max(totalDist, nearestTaxiDst * taxiW);
+			Point nearestPoint;
+			double nearestPointDist = 1e18;
 			for (const auto& p : result) {
-				totalDist += getDistance(p, curPoint) * pointW;
+				double d = getDistance(p, curPoint);
+				//totalDist += pointW / (d * d);
+				if (d < nearestPointDist) {
+					nearestPointDist = d;
+					nearestPoint = p;
+				}
 			}
-			totalDist /= totalSz;
+			totalDist = max(totalDist, nearestPointDist * pointW);
 			if (totalDist > bestTotalDist) {
 				bestTotalDist = totalDist;
 				bestPointId = i;
@@ -1309,7 +1330,6 @@ set<Point> SolutionEnvironment::generatePointsForTaxisByTaxis(const vector<Taxi>
 }
 
 void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c) {
-	return;
 	set<Taxi> freeTaxis;
 	for (auto& taxi : env->getTaxis()) {
 		CommandsSequence commands = taxi.commands();
@@ -1318,8 +1338,8 @@ void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, m
 		//if (!taxi.isAtBorder()) continue;
 		freeTaxis.insert(taxi);
 	}
-	set<Point> points = generatePointsForTaxisByPassengers(psngrs, (int)freeTaxis.size());
-	//set<Point> points = generatePointsForTaxisByTaxis(env->getTaxis(), (int)freeTaxis.size());
+	//set<Point> points = generatePointsForTaxisByPassengers(psngrs, (int)freeTaxis.size());
+	set<Point> points = generatePointsForTaxisByTaxis(env->getTaxis(), (int)freeTaxis.size());
 	while (!freeTaxis.empty()) {
 		Point p;
 		Taxi t;
