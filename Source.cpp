@@ -1439,6 +1439,35 @@ pair<double, CommandsSequence> getBestSequenceMinDist(CommandsSequence commands,
 	return make_pair(mxScore, resSequence);
 };
 
+pair<double, CommandsSequence> getBestSequenceMoveOne(CommandsSequence commands, const Taxi& taxi) {
+	CommandsSequence resSequence;
+	double mxScore = -1e9;
+	for (const auto& pasteCommand : commands) {
+		int aPaste = pasteCommand.getA();
+		CommandsSequence withoutOneCommands;
+		for (const auto& c : commands) {
+			if (c.getA() == aPaste) {
+				continue;
+			}
+			withoutOneCommands.addCommand(c);
+		}
+		for (int i = 0; i <= withoutOneCommands.size(); i++) {
+			auto curCommands = withoutOneCommands;
+			curCommands.insert(pasteCommand, i);
+			if (!curCommands.isCorrect()) {
+				continue;
+			}
+			double curScore = curCommands.estimateScore(taxi);
+			if (curScore > mxScore) {
+				mxScore = curScore;
+				resSequence = curCommands;
+			}
+		}
+	}
+	assert(mxScore > -100);
+	return make_pair(mxScore, resSequence);
+};
+
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
 	if (!env->checkToDoOptimizations()) {
 		return;
@@ -1451,11 +1480,14 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 //		commands = best.second;
 //		auto best1 = getBestSequenceMinDist(commands, taxi);
 		auto best2 = getBestSequenceInsertLast(commands, taxi);
-		if (best2.first > best2.first) {
+		auto best3 = getBestSequenceMoveOne(best2.second, taxi);
+		auto best4 = getBestSequenceMoveOne(best3.second, taxi);
+		commands = best4.second;
+		/*if (best2.first > best2.first) {
 			commands = best2.second;
 		} else {
 			commands = best2.second;
-		}
+		}*/
 	}
 }
 
