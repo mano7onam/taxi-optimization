@@ -30,7 +30,7 @@ const double DOUBLE_INF = 1e9;
 const double EPS = 1e-12;
 const int MAX_ID = 1000;
 
-const int MAX_SECONDS_CNT = 14;
+const int MAX_SECONDS_CNT = 11;
 
 
 // defines
@@ -426,7 +426,7 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 	vector<pair<double, Passenger>> newPassengers;
 	for (const auto& p : psngrs) {
 		double bestAddition = -DOUBLE_INF;
-		for (const auto& taxi : taxis) {
+		/*for (const auto& taxi : taxis) {
 			auto takePas = Command(p.from(), p.id());
 			auto dropPas = Command(p.to(), -p.id());
 			auto commands = taxi.commands();
@@ -441,7 +441,11 @@ vector<Passenger> sortPassengerByBestTaxi(const vector<Passenger> &psngrs, const
 				bestAddition = addition;
 			}
 		}
-		newPassengers.emplace_back(bestAddition, p);
+		newPassengers.emplace_back(bestAddition, p);*/
+		double u = 100 + p.getIdealDuration();
+		double t = env->time() - p.time();
+		double d = t * u;
+		newPassengers.emplace_back(d, p);
 	}
 	sort(newPassengers.rbegin(), newPassengers.rend());
 
@@ -585,7 +589,8 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 }
 
 void updateAndCommit(UpdateState state) {
-	auto m = calcCommands(state, state == ST_FINISH/* || rand() % 20 == 0*/);
+	static int c = 0;
+	auto m = calcCommands(state, state == ST_FINISH/* || ++c % 20 == 0*/);
 	// auto m = calcCommands(state, rand() % 20 == 0);
 	env->commit(m);
 	interactor->commit(m);
@@ -1433,13 +1438,13 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 	} else {
 //		auto best = getBestSequenceInsertLast(commands, taxi);
 //		commands = best.second;
-		auto best1 = getBestSequenceMinDist(commands, taxi);
+		//auto best1 = getBestSequenceMinDist(commands, taxi);
 		auto best2 = getBestSequenceInsertLast(commands, taxi);
-		if (best1.first > best2.first) {
-			commands = best1.second;
-		} else {
+		//if (best1.first > best2.first) {
+			//commands = best1.second;
+		//} else {
 			commands = best2.second;
-		}
+	//	}
 	}
 }
 
