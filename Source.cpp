@@ -210,6 +210,9 @@ public:
 	void insert(CommandsSequence cs, int ind);
 	void delPrev(int ind);
 
+	void delPassenger(int id);
+	void pickUpPassenger(const Passenger &p);
+
 	CommandsList::iterator begin() { return v.begin(); }
 	CommandsList::iterator end() { return v.end(); }
 
@@ -247,6 +250,9 @@ public:
 
 	string toStringToDraw() const;
 
+	void distributeToTaxi(int idTaxi) { _idTaxi = idTaxi; }
+	void deleteDistributionToTaxi() { _idTaxi = -1; }
+
 protected:
 	int _id;
 	int _time;     // time when this passenger appeared
@@ -255,6 +261,8 @@ protected:
 
 	int _waitingTime;   // d1 for score calculation
 	int _totalDuration; // used for d2 calculation
+
+	int _idTaxi;
 };
 
 class Taxi {
@@ -271,6 +279,9 @@ public:
 
 	void update(int prevTime, int curTime);
 	void updateCommands(const CommandsSequence &commands) { _commands = commands; }
+
+	bool isGoodToPickUp(const Passenger &p) const;
+	void pickUpPassenger(const Passenger &p);
 
 	void addPassenger(const Passenger &p);
 	void delPassenger(const Passenger &p);
@@ -909,6 +920,16 @@ void Taxi::ask() {
 Taxi::Taxi() {
 }
 
+bool Taxi::isGoodToPickUp(const Passenger &p) const {
+	auto firstCommand = *commands().begin();
+	double oldDist = getDistance(_pos, firstCommand.getPoint());
+	double newDist =
+			getDistance(_pos, p.from()) +
+			getDistance(p.from(), p.to()) +
+			getDistance(p.to(), firstCommand.getPoint());
+	return newDist < oldDist * 1.5;
+}
+
 void Taxi::addPassenger(const Passenger &p) {
 	assert(static_cast<int>(_passengers.size()) < 4);
 	_passengers.insert(p);
@@ -1181,6 +1202,33 @@ void CommandsSequence::delPrev(int ind) {
 	auto it = v.begin();
 	for (int i = 0; i < ind; ++i, ++it);
 	v.erase(--it);
+}
+
+void CommandsSequence::delPassenger(int id) {
+	CommandsList::iterator it_land;
+	for (it_land = v.begin(); it_land != v.end(); it_land++) {
+		if (it_land->getA() == id) {
+			break;
+		}
+	}
+	assert(it_land != v.end());
+	v.erase(it_land);
+
+	CommandsList::iterator it_debarkation;
+	for (it_debarkation = v.begin(); it_debarkation != v.end(); it_debarkation++) {
+		if (it_debarkation->getA() == -id) {
+			break;
+		}
+	}
+	assert(it_debarkation != v.end());
+	v.erase(it_debarkation);
+}
+
+void CommandsSequence::pickUpPassenger(const Passenger &p) {
+	Command pLand(p.from(), p.id());
+	Command pDebark(p.from(), p.id());
+	v.push_front(pDebark);
+	v.push_front(pLand);
 }
 
 // SolutionEnvironment ==================================================================================
