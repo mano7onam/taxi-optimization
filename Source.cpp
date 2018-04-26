@@ -101,6 +101,8 @@ public:
 
 	void logStateToDraw(const string &filename, int logTime) const;
 
+	bool checkToDoOptimizations() const;
+
 protected:
 	int _time;
 	int _width;
@@ -111,6 +113,8 @@ protected:
 	IdToPassMap _wayPassengers;
 	IdToPassMap _freePassengers;
 	IdToPassMap _allPassengers; // used to check score in the end
+	long long startWorkingTime;
+	mutable bool flagDoOptimizations;
 };
 
 // position on plane
@@ -341,6 +345,8 @@ public:
 	// reorder commands to get maximum score from it
 	void optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const;
 
+	set<Point> generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const;
+	set<Point> generatePointsForTaxisByTaxis(const vector<Taxi> &taxis, int num) const;
 	void distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c);
 private:
 	IdToPassMap _waitingPassengers; // list of undistributed to taxis passengers
@@ -349,6 +355,9 @@ private:
 };
 
 void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
+	if (!env->checkToDoOptimizations()) {
+		return;
+	}
 	sol->setWaitingPassangers(env->getFreePassengers());
 	for (auto& taxi : taxis) {
 		CommandsSequence commands;
@@ -363,6 +372,9 @@ void clearTaxiCommands(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCom
 }
 
 void clearTaxiCommandsRecentPassenger(vector<Taxi> &taxis, map<int, CommandsSequence> &mTaxiCommands) {
+	if (!env->checkToDoOptimizations()) {
+		return;
+	}
 	sol->setWaitingPassangers(env->getFreePassengers());
 	for (auto& taxi : taxis) {
 		CommandsSequence newCommands;
@@ -524,16 +536,16 @@ map<int, CommandsSequence> calcCommands(UpdateState state, bool flagClearCommand
 	vector<Taxi> taxis = env->getTaxis(); // all taxis
 	map<int, CommandsSequence> mTaxiCommands;
 
-	if (flagClearCommands) {
+	if (flagClearCommands && env->checkToDoOptimizations()) {
 		clearTaxiCommands(taxis, mTaxiCommands);
 	}
-	if (false) {
+	if (false && env->checkToDoOptimizations()) {
 		clearTaxiCommandsRecentPassenger(taxis, mTaxiCommands);
 	}
 
 	auto psngrs = sortPassengerByBestTaxi(sol->getVectorWaitingPassengers(), taxis);
 
-	if (/*psngrs.size() < 5*/false) {
+	if (/*psngrs.size() < 5*/false && env->checkToDoOptimizations()) {
 		updateMapCommandsBrutforcePassengersPermutation(psngrs, taxis, mTaxiCommands);
 	} else {
 		updateMapCommands(psngrs, taxis, mTaxiCommands);
@@ -592,6 +604,9 @@ Environment::Environment() {
 	_time = 0;
 	_maxPsngId = 0;
 	_maxTaxiId = 0;
+
+	startWorkingTime = clock();
+	flagDoOptimizations = true;
 }
 
 const Passenger Environment::getLastPassenger() const {
@@ -786,6 +801,17 @@ bool Environment::isRecentPassenger(const Passenger &p) const {
 
 bool Environment::isRecentPassenger(int id) const {
 	return _maxPsngId - id < 4;
+}
+
+bool Environment::checkToDoOptimizations() const {
+	if (!flagDoOptimizations) {
+		return false;
+	}
+	double currTime = (double)(clock() - startWorkingTime) / CLOCKS_PER_SEC;
+	if (currTime > 11) {
+		flagDoOptimizations = false;
+	}
+	return flagDoOptimizations;
 }
 
 // Point ==================================================================================
@@ -1161,6 +1187,9 @@ void CommandsSequence::delPrev(int ind) {
 // SolutionEnvironment ==================================================================================
 
 void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, const Taxi& taxi) const {
+	if (!env->checkToDoOptimizations()) {
+		return;
+	}
 	if (commands.size() < FULL_REORDER_LIMIT) {
 		int fact = 1;
 		for (int i = 2; i < commands.size(); i++) {
@@ -1230,6 +1259,55 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 	}
 }
 
+set<Point> SolutionEnvironment::generatePointsForTaxisByPassengers(const vector<Passenger> &psngrs, int n) const {
+	set<Point> points;
+	for (auto p : psngrs) {
+		points.insert(p.from());
+	}
+	while (points.size() < n) {
+		points.insert(Point(rand() % env->width(), rand() % env->height()));
+	}
+	return points;
+}
+
+set<Point> SolutionEnvironment::generatePointsForTaxisByTaxis(const vector<Taxi> &taxis, int num) const {
+	set<Point> result;
+
+	vector<Point> candidats;
+	for (int i = 0; i < 500; ++i) {
+		candidats.emplace_back(rand() % env->width(), rand() % env->height());
+	}
+
+	double taxiW = 0.002;
+	double pointW = 0.001;
+	while (result.size() < num) {
+		double bestTotalDist = 0;
+		int bestPointId = 0;
+		for (int i = 0; i < candidats.size(); ++i) {
+			auto curPoint = candidats[i];
+			double totalDist = 0;
+			int totalSz = (int)taxis.size() + (int)result.size();
+			assert(totalSz != 0);
+			for (const auto& taxi : taxis) {
+				totalDist += getDistance(taxi.pos(), curPoint) * taxiW;
+			}
+			for (const auto& p : result) {
+				totalDist += getDistance(p, curPoint) * pointW;
+			}
+			totalDist /= totalSz;
+			if (totalDist > bestTotalDist) {
+				bestTotalDist = totalDist;
+				bestPointId = i;
+			}
+		}
+		result.insert(candidats[bestPointId]);
+		candidats[bestPointId] = candidats.back();
+		candidats.pop_back();
+	}
+
+	return result;
+}
+
 void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, map<int, CommandsSequence>& c) {
 	return;
 	set<Taxi> freeTaxis;
@@ -1240,14 +1318,8 @@ void SolutionEnvironment::distributeFreeTaxis(const vector<Passenger> &psngrs, m
 		//if (!taxi.isAtBorder()) continue;
 		freeTaxis.insert(taxi);
 	}
-	int n = freeTaxis.size();
-	set<Point> points;
-	for (auto p : psngrs) {
-		points.insert(p.from());
-	}
-	while (points.size() < n) {
-		points.insert(Point(rand() % env->width(), rand() % env->height()));
-	}
+	set<Point> points = generatePointsForTaxisByPassengers(psngrs, (int)freeTaxis.size());
+	//set<Point> points = generatePointsForTaxisByTaxis(env->getTaxis(), (int)freeTaxis.size());
 	while (!freeTaxis.empty()) {
 		Point p;
 		Taxi t;
