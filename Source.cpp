@@ -1406,7 +1406,7 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 		auto best1 = getBestSequenceMinDist(commands, taxi);
 		auto best2 = getBestSequenceInsertLast(commands, taxi);
 		if (best1.first > best2.first) {
-			commands = best1.second;
+			commands = best2.second;
 		} else {
 			commands = best2.second;
 		}
