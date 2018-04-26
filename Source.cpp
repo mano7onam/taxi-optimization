@@ -1403,8 +1403,13 @@ void SolutionEnvironment::optimizeCommandsOrder(CommandsSequence& commands, cons
 	} else {
 //		auto best = getBestSequenceInsertLast(commands, taxi);
 //		commands = best.second;
-		auto best = getBestSequenceMinDist(commands, taxi);
-		commands = best.second;
+		auto best1 = getBestSequenceMinDist(commands, taxi);
+		auto best2 = getBestSequenceInsertLast(commands, taxi);
+		if (best1.first > best2.first) {
+			commands = best1.second;
+		} else {
+			commands = best2.second;
+		}
 	}
 }
 
